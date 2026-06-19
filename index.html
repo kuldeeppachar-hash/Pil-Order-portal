@@ -119,6 +119,10 @@
   .realtime-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #0F6E56; background: #E1F5EE; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
   .realtime-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #1D9E75; animation: pulse 1.5s infinite; display: inline-block; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  
+  /* Action buttons group */
+  .action-group { display: flex; gap: 6px; align-items: center; }
+  
   @media(max-width:600px) { .sidebar{display:none} .stat-grid{grid-template-columns:1fr 1fr} }
 </style>
 </head>
@@ -275,14 +279,14 @@
           <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span class="realtime-badge" style="font-size:11px">Auto-updating</span>
             <button class="btn btn-excel btn-sm" onclick="exportOrders()">
-              <i class="ti ti-file-spreadsheet"></i> Export to Excel
+              <i class="ti ti-file-spreadsheet"></i> Export all to Excel
             </button>
           </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
             <table>
-              <thead><tr><th>Order ID</th><th>Date &amp; Time</th><th>Customer</th><th>City</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th><th>Update</th></tr></thead>
+              <thead><tr><th>Order ID</th><th>Date &amp; Time</th><th>Customer</th><th>City</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody id="admin-order-tbody"><tr><td colspan="8" class="loading-overlay"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Loading orders...</td></tr></tbody>
             </table>
           </div>
@@ -690,11 +694,16 @@ function renderAdminOrders(){
       <td style="text-align:right;font-weight:600">₹${o.total.toFixed(2)}</td>
       <td><span class="status-pill s-${o.status.toLowerCase()}">${o.status}</span></td>
       <td>
-        <select onchange="changeStatus('${o.id}',this.value)" style="padding:3px 8px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;font-family:var(--font-sans);background:#fff">
-          <option ${o.status==='New'?'selected':''}>New</option>
-          <option ${o.status==='Pending'?'selected':''}>Pending</option>
-          <option ${o.status==='Confirmed'?'selected':''}>Confirmed</option>
-        </select>
+        <div class="action-group">
+          <select onchange="changeStatus('${o.id}',this.value)" style="padding:3px 8px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;font-family:var(--font-sans);background:#fff">
+            <option ${o.status==='New'?'selected':''}>New</option>
+            <option ${o.status==='Pending'?'selected':''}>Pending</option>
+            <option ${o.status==='Confirmed'?'selected':''}>Confirmed</option>
+          </select>
+          <button class="btn btn-excel btn-sm" onclick="exportIndividualOrder('${o.id}')" title="Export this order to Excel">
+            <i class="ti ti-file-spreadsheet"></i>
+          </button>
+        </div>
       </td>
     </tr>`).join('');
 }
@@ -780,17 +789,122 @@ function dateStamp(){
   return new Date().toISOString().slice(0,10);
 }
 
-function applyHeaderStyle(ws, numCols){
-  // Bold green header row
-  for(let c=0;c<numCols;c++){
-    const cellRef=XLSX.utils.encode_cell({r:0,c});
-    if(!ws[cellRef]) continue;
-    ws[cellRef].s={
-      font:{bold:true,color:{rgb:"0F6E56"}},
-      fill:{fgColor:{rgb:"E1F5EE"}},
-      border:{bottom:{style:"thin",color:{rgb:"A7F3D0"}}}
+// ========== NEW: Export individual order with reference format ==========
+function exportIndividualOrder(orderId){
+  const order=allOrders[orderId];
+  if(!order){alert('Order not found.');return;}
+  
+  // Get shipper pack data for each product
+  const getShipperPack = (code) => {
+    const prod=PRODUCTS.find(p=>p.code===code);
+    // Default shipper pack values (you can customize these)
+    const packsMap={
+      'PCS': 120,
+      'BOX': 60,
+      'PKT': 50
+    };
+    return prod ? packsMap[prod.uom] || 60 : 60;
+  };
+
+  // Build data for Excel
+  const wsData=[];
+  
+  // Row 1: Party Name
+  wsData.push({
+    'PARTY NAME:': order.customer.name,
+  });
+
+  // Row 2: Headers
+  wsData.push({
+    'Item Code': 'Item Code',
+    'Material Description': 'Material Description',
+    'UOM': 'UOM',
+    'Shipper\nPack': 'Shipper Pack',
+    'MRP': 'MRP',
+    'PTD ': 'PTD',
+    'PTR': 'PTR',
+    'Order Qty': 'Order Qty',
+    'Amount': 'Amount'
+  });
+
+  // Rows 3+: Order items
+  order.items.forEach(item=>{
+    const prod=PRODUCTS.find(p=>p.code===item.code);
+    if(prod){
+      wsData.push({
+        'Item Code': parseInt(item.code) || item.code,
+        'Material Description': item.name,
+        'UOM': item.uom,
+        'Shipper\nPack': getShipperPack(item.code),
+        'MRP': prod.mrp,
+        'PTD ': prod.ptd,
+        'PTR': null, // Will be formula
+        'Order Qty': item.qty,
+        'Amount': null // Will be formula
+      });
+    }
+  });
+
+  // Create worksheet from data
+  const ws=XLSX.utils.json_to_sheet(wsData, {header:[
+    'Item Code','Material Description','UOM','Shipper\nPack','MRP','PTD ','PTR','Order Qty','Amount'
+  ]});
+
+  // Set column widths
+  ws['!cols']=[
+    {wch: 14},  // Item Code
+    {wch: 40},  // Material Description
+    {wch: 8},   // UOM
+    {wch: 12},  // Shipper Pack
+    {wch: 12},  // MRP
+    {wch: 12},  // PTD
+    {wch: 12},  // PTR
+    {wch: 12},  // Order Qty
+    {wch: 14}   // Amount
+  ];
+
+  // Add formulas for PTR and Amount columns
+  const startRow=3; // Data starts from row 3 (row 1 is party, row 2 is header)
+  order.items.forEach((item, idx)=>{
+    const rowNum=startRow+idx;
+    const fRowStr=String.fromCharCode(70+idx); // F, G, H, I columns
+    
+    // PTR formula (column G): =F*120%
+    const ptrCell=XLSX.utils.encode_cell({r:rowNum-1, c:6});
+    ws[ptrCell]={f:`F${rowNum}*1.2`};
+    
+    // Amount formula (column I): =H*F
+    const amtCell=XLSX.utils.encode_cell({r:rowNum-1, c:8});
+    ws[amtCell]={f:`H${rowNum}*F${rowNum}`};
+  });
+
+  // Style headers (row 2)
+  const headerRow=2;
+  for(let c=0;c<9;c++){
+    const cell=XLSX.utils.encode_cell({r:headerRow-1, c});
+    if(!ws[cell]) ws[cell]={};
+    ws[cell].s={
+      font:{bold:true, color:{rgb:"FFFFFF"}},
+      fill:{fgColor:{rgb:"1D9E75"}},
+      alignment:{horizontal:"center", vertical:"center"},
+      border:{
+        top:{style:"thin",color:{rgb:"000000"}},
+        bottom:{style:"thin",color:{rgb:"000000"}},
+        left:{style:"thin",color:{rgb:"000000"}},
+        right:{style:"thin",color:{rgb:"000000"}}
+      }
     };
   }
+
+  // Create workbook
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Order');
+
+  // Generate filename with party name and order ID
+  const cleanName=order.customer.name.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+  const filename=`Order_of_${cleanName}_${orderId.replace('ORD-','')}.xlsx`;
+  
+  XLSX.writeFile(wb, filename);
 }
 
 // Admin: Export all orders (respects current filters)
