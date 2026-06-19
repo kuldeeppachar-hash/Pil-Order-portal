@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- ======================================================
      FIREBASE CONFIG — Replace with YOUR values from Step 2
@@ -16,7 +17,7 @@
   import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
   const firebaseConfig = {
-     apiKey: "AIzaSyDlpaT_qSsB7AQ-cGYVwGRMMU8TMEfUmN0",
+    apiKey: "AIzaSyDlpaT_qSsB7AQ-cGYVwGRMMU8TMEfUmN0",
   authDomain: "pil-order-portal.firebaseapp.com",
   databaseURL: "https://pil-order-portal-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "pil-order-portal",
@@ -72,6 +73,8 @@
   .btn-primary:hover { background: #0F6E56; border-color: #0F6E56; }
   .btn-sm { padding: 5px 12px; font-size: 12px; }
   .btn-danger { background: var(--color-background-danger); color: var(--color-text-danger); border-color: var(--color-border-danger); }
+  .btn-excel { background: #f0fdf7; color: #0F6E56; border-color: #a7f3d0; display: inline-flex; align-items: center; gap: 5px; }
+  .btn-excel:hover { background: #dcfce7; }
   .card { background: var(--color-background-primary); border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem; }
   .login-screen-inner { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; background: var(--color-background-secondary); }
   .login-card { background: var(--color-background-primary); border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-lg); padding: 2rem; width: 320px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
@@ -145,7 +148,7 @@
         <i class="ti ti-arrow-right"></i> Sign in
       </button>
       <p style="font-size:11px;color:var(--color-text-secondary);text-align:center;margin-top:-6px">
-        Customers: use the password shared by your sales officer
+        Default password: 123456 — you can change it after login
       </p>
     </div>
   </div>
@@ -165,6 +168,7 @@
     <div class="sidebar">
       <div class="nav-item active" onclick="custNav('order')" id="cnav-order"><i class="ti ti-shopping-cart"></i> Order now</div>
       <div class="nav-item" onclick="custNav('history')" id="cnav-history"><i class="ti ti-clock"></i> My orders</div>
+      <div class="nav-item" onclick="custNav('changepass')" id="cnav-changepass"><i class="ti ti-lock"></i> Change password</div>
     </div>
     <div class="content">
       <div id="cp-order">
@@ -197,12 +201,42 @@
         </div>
       </div>
       <div id="cp-history" style="display:none">
-        <div class="page-title">My orders</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div class="page-title" style="margin:0">My orders</div>
+          <button class="btn btn-excel btn-sm" onclick="exportMyOrders()">
+            <i class="ti ti-file-spreadsheet"></i> Export to Excel
+          </button>
+        </div>
         <div class="card" style="padding:0;overflow:hidden">
           <table>
             <thead><tr><th>Order ID</th><th>Date &amp; Time</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th></tr></thead>
             <tbody id="hist-tbody"></tbody>
           </table>
+        </div>
+      </div>
+      <div id="cp-changepass" style="display:none">
+        <div class="page-title">Change password</div>
+        <div class="card" style="max-width:360px;display:flex;flex-direction:column;gap:14px">
+          <p style="font-size:13px;color:var(--color-text-secondary)">Set a new password for your account. You will use this password on your next login.</p>
+          <div id="cp-err" class="err" style="display:none"></div>
+          <div id="cp-success" style="display:none;background:#E1F5EE;color:#0F6E56;padding:10px 14px;border-radius:var(--border-radius-md);font-size:13px;border:1px solid #a7f3d0">
+            <i class="ti ti-circle-check"></i> Password changed successfully!
+          </div>
+          <div class="field">
+            <label>Current password</label>
+            <input type="password" id="cp-current" placeholder="Enter current password" />
+          </div>
+          <div class="field">
+            <label>New password</label>
+            <input type="password" id="cp-new" placeholder="Minimum 6 characters" />
+          </div>
+          <div class="field">
+            <label>Confirm new password</label>
+            <input type="password" id="cp-confirm" placeholder="Repeat new password" />
+          </div>
+          <button class="btn btn-primary" onclick="doChangePassword()" style="width:100%">
+            <i class="ti ti-lock-check"></i> Update password
+          </button>
         </div>
       </div>
     </div>
@@ -238,8 +272,11 @@
           <select id="admin-status-filter" onchange="renderAdminOrders()">
             <option value="">All statuses</option><option>New</option><option>Pending</option><option>Confirmed</option>
           </select>
-          <div style="margin-left:auto;font-size:12px;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px">
-            <span class="realtime-badge">Auto-updating</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="realtime-badge" style="font-size:11px">Auto-updating</span>
+            <button class="btn btn-excel btn-sm" onclick="exportOrders()">
+              <i class="ti ti-file-spreadsheet"></i> Export to Excel
+            </button>
           </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden">
@@ -256,6 +293,11 @@
         <div class="filter-row">
           <select id="admin-cat-filter" onchange="renderAdminProducts()"><option value="">All categories</option></select>
           <input id="admin-prod-search" placeholder="Search..." oninput="renderAdminProducts()" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans)" />
+          <div style="margin-left:auto">
+            <button class="btn btn-excel btn-sm" onclick="exportProducts()">
+              <i class="ti ti-file-spreadsheet"></i> Export to Excel
+            </button>
+          </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
@@ -268,6 +310,11 @@
       </div>
       <div id="ap-customers" style="display:none">
         <div class="page-title">Customers <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400">(37 stockists)</span></div>
+        <div class="filter-row" style="justify-content:flex-end">
+          <button class="btn btn-excel btn-sm" onclick="exportCustomers()">
+            <i class="ti ti-file-spreadsheet"></i> Export to Excel
+          </button>
+        </div>
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
             <table>
@@ -402,11 +449,10 @@ const CUSTOMERS=[
 
 // ===================== STATE =====================
 let currentRole=null, currentCustomer=null, loginRole='customer';
-let fbListener=null;  // Firebase realtime listener handle
-let allOrders={};     // local cache of orders from Firebase {orderId: orderObj}
+let fbListener=null;
+let allOrders={};
 
-// ---- Customer password (set this to the same for all customers, or per-customer) ----
-const CUSTOMER_PASSWORD="pil@2025";
+const DEFAULT_CUSTOMER_PASSWORD="123456";
 
 // ===================== FIREBASE HELPERS =====================
 function fb(){return window._fb;}
@@ -424,7 +470,7 @@ async function updateOrderStatus(orderId, status){
 function subscribeOrders(callback){
   const {db,ref,onValue}=fb();
   const ordersRef=ref(db,'orders');
-  if(fbListener) fbListener(); // unsubscribe previous
+  if(fbListener) fbListener();
   fbListener=onValue(ordersRef,(snapshot)=>{
     const data=snapshot.val()||{};
     allOrders=data;
@@ -459,10 +505,19 @@ async function doLogin(){
     renderAdminProducts();
     subscribeOrders((data)=>{renderAdminOrders();});
   } else {
-    if(pw!==CUSTOMER_PASSWORD){err.textContent='Incorrect password. Please contact your sales officer.';err.style.display='block';return;}
     const sel=document.getElementById('cust-select');
-    currentCustomer=CUSTOMERS.find(c=>c.code===sel.value);
-    if(!currentCustomer){err.textContent='Please select your account.';err.style.display='block';return;}
+    const candidate=CUSTOMERS.find(c=>c.code===sel.value);
+    if(!candidate){err.textContent='Please select your account.';err.style.display='block';return;}
+    // Fetch this customer's password from Firebase (fallback to default if not set)
+    try{
+      const {db,ref,get}=fb();
+      const snap=await get(ref(db,`customerPasswords/${candidate.code}`));
+      const storedPw=snap.exists()?snap.val():DEFAULT_CUSTOMER_PASSWORD;
+      if(pw!==storedPw){err.textContent='Incorrect password. Please contact your sales officer.';err.style.display='block';return;}
+    }catch(e){
+      err.textContent='Login error: '+e.message;err.style.display='block';return;
+    }
+    currentCustomer=candidate;
     currentRole='customer';
     document.getElementById('cust-name-badge').textContent=currentCustomer.name;
     showScreen('s-customer');
@@ -487,11 +542,16 @@ function showScreen(id){
 
 // ===================== CUSTOMER NAV =====================
 function custNav(p){
-  ['order','history'].forEach(x=>{
+  ['order','history','changepass'].forEach(x=>{
     document.getElementById('cp-'+x).style.display=x===p?'block':'none';
     document.getElementById('cnav-'+x).classList.toggle('active',x===p);
   });
   if(p==='history') renderHistory();
+  if(p==='changepass'){
+    document.getElementById('cp-err').style.display='none';
+    document.getElementById('cp-success').style.display='none';
+    ['cp-current','cp-new','cp-confirm'].forEach(id=>document.getElementById(id).value='');
+  }
 }
 
 function adminNav(p){
@@ -681,13 +741,204 @@ function renderAdminCustomers(){
     </tr>`).join('');
 }
 
+// ===================== CHANGE PASSWORD =====================
+async function doChangePassword(){
+  const current=document.getElementById('cp-current').value;
+  const newPw=document.getElementById('cp-new').value;
+  const confirm=document.getElementById('cp-confirm').value;
+  const errEl=document.getElementById('cp-err');
+  const okEl=document.getElementById('cp-success');
+  errEl.style.display='none'; okEl.style.display='none';
+
+  if(!current||!newPw||!confirm){
+    errEl.textContent='Please fill in all fields.';errEl.style.display='block';return;
+  }
+  if(newPw.length<6){
+    errEl.textContent='New password must be at least 6 characters.';errEl.style.display='block';return;
+  }
+  if(newPw!==confirm){
+    errEl.textContent='New passwords do not match.';errEl.style.display='block';return;
+  }
+  // Verify current password
+  try{
+    const {db,ref,get,set}=fb();
+    const snap=await get(ref(db,`customerPasswords/${currentCustomer.code}`));
+    const storedPw=snap.exists()?snap.val():DEFAULT_CUSTOMER_PASSWORD;
+    if(current!==storedPw){
+      errEl.textContent='Current password is incorrect.';errEl.style.display='block';return;
+    }
+    await set(ref(db,`customerPasswords/${currentCustomer.code}`),newPw);
+    okEl.style.display='block';
+    ['cp-current','cp-new','cp-confirm'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){
+    errEl.textContent='Error updating password: '+e.message;errEl.style.display='block';
+  }
+}
+
+// ===================== EXPORT TO EXCEL =====================
+function dateStamp(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function applyHeaderStyle(ws, numCols){
+  // Bold green header row
+  for(let c=0;c<numCols;c++){
+    const cellRef=XLSX.utils.encode_cell({r:0,c});
+    if(!ws[cellRef]) continue;
+    ws[cellRef].s={
+      font:{bold:true,color:{rgb:"0F6E56"}},
+      fill:{fgColor:{rgb:"E1F5EE"}},
+      border:{bottom:{style:"thin",color:{rgb:"A7F3D0"}}}
+    };
+  }
+}
+
+// Admin: Export all orders (respects current filters)
+function exportOrders(){
+  const cf=document.getElementById('admin-cust-filter').value;
+  const sf=document.getElementById('admin-status-filter').value;
+  const orders=Object.values(allOrders)
+    .sort((a,b)=>b.timestamp-a.timestamp)
+    .filter(o=>(!cf||o.customer.code===cf)&&(!sf||o.status===sf));
+
+  if(!orders.length){alert('No orders to export.');return;}
+
+  // Sheet 1: Order summary
+  const summaryData=orders.map(o=>({
+    'Order ID': o.id,
+    'Date': o.date,
+    'Time': o.time||'',
+    'Customer Code': o.customer.code,
+    'Customer Name': o.customer.name,
+    'City': o.customer.city,
+    'State': o.customer.state,
+    'Phone': o.customer.phone||'',
+    'No. of Items': o.items.length,
+    'Total PTD (Rs)': parseFloat(o.total.toFixed(2)),
+    'Status': o.status
+  }));
+
+  // Sheet 2: Order line items (one row per product per order)
+  const lineData=[];
+  orders.forEach(o=>{
+    o.items.forEach(item=>{
+      lineData.push({
+        'Order ID': o.id,
+        'Date': o.date,
+        'Customer Name': o.customer.name,
+        'City': o.customer.city,
+        'Status': o.status,
+        'Item Code': item.code,
+        'Product Name': item.name,
+        'UOM': item.uom,
+        'Qty': item.qty,
+        'PTD Rate (Rs)': item.ptd,
+        'Amount (Rs)': parseFloat(item.amount.toFixed(2))
+      });
+    });
+  });
+
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(summaryData);
+  const ws2=XLSX.utils.json_to_sheet(lineData);
+
+  // Column widths
+  ws1['!cols']=[{wch:20},{wch:12},{wch:10},{wch:14},{wch:28},{wch:16},{wch:18},{wch:14},{wch:12},{wch:16},{wch:12}];
+  ws2['!cols']=[{wch:20},{wch:12},{wch:28},{wch:16},{wch:12},{wch:14},{wch:34},{wch:8},{wch:8},{wch:14},{wch:14}];
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'Order Summary');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Order Line Items');
+  XLSX.writeFile(wb, `PIL_Orders_${dateStamp()}.xlsx`);
+}
+
+// Admin: Export product catalogue (respects current filter)
+function exportProducts(){
+  const prods=getFilteredProducts('admin-cat-filter','admin-prod-search');
+  if(!prods.length){alert('No products to export.');return;}
+
+  const data=prods.map(p=>({
+    'Item Code': p.code,
+    'Product Name': p.name,
+    'Category': p.cat,
+    'UOM': p.uom,
+    'MRP (Rs)': p.mrp,
+    'PTD (Rs)': p.ptd
+  }));
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(data);
+  ws['!cols']=[{wch:14},{wch:42},{wch:20},{wch:8},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Product Catalogue');
+  XLSX.writeFile(wb, `PIL_Products_${dateStamp()}.xlsx`);
+}
+
+// Admin: Export customers
+function exportCustomers(){
+  const data=CUSTOMERS.map(c=>({
+    'Customer Code': c.code,
+    'Name': c.name,
+    'City': c.city,
+    'State': c.state,
+    'Phone': c.phone||'',
+    'Email': c.email
+  }));
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(data);
+  ws['!cols']=[{wch:16},{wch:36},{wch:18},{wch:18},{wch:14},{wch:32}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+  XLSX.writeFile(wb, `PIL_Customers_${dateStamp()}.xlsx`);
+}
+
+// Customer: Export their own order history
+function exportMyOrders(){
+  const myOrders=Object.values(allOrders)
+    .filter(o=>o.customer&&o.customer.code===currentCustomer.code)
+    .sort((a,b)=>b.timestamp-a.timestamp);
+
+  if(!myOrders.length){alert('No orders to export.');return;}
+
+  const summaryData=myOrders.map(o=>({
+    'Order ID': o.id,
+    'Date': o.date,
+    'Time': o.time||'',
+    'No. of Items': o.items.length,
+    'Total PTD (Rs)': parseFloat(o.total.toFixed(2)),
+    'Status': o.status
+  }));
+
+  const lineData=[];
+  myOrders.forEach(o=>{
+    o.items.forEach(item=>{
+      lineData.push({
+        'Order ID': o.id,
+        'Date': o.date,
+        'Item Code': item.code,
+        'Product Name': item.name,
+        'UOM': item.uom,
+        'Qty': item.qty,
+        'PTD Rate (Rs)': item.ptd,
+        'Amount (Rs)': parseFloat(item.amount.toFixed(2))
+      });
+    });
+  });
+
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(summaryData);
+  const ws2=XLSX.utils.json_to_sheet(lineData);
+  ws1['!cols']=[{wch:20},{wch:12},{wch:10},{wch:12},{wch:16},{wch:12}];
+  ws2['!cols']=[{wch:20},{wch:12},{wch:14},{wch:38},{wch:8},{wch:8},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'My Orders');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Order Details');
+  XLSX.writeFile(wb, `PIL_MyOrders_${currentCustomer.code}_${dateStamp()}.xlsx`);
+}
+
 // ===================== INIT =====================
 (function init(){
   const sel=document.getElementById('cust-select');
   sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
   buildCatFilter();
 
-  // Wait for Firebase to be ready
   window.addEventListener('firebase-ready',()=>{
     console.log('Firebase ready!');
   });
