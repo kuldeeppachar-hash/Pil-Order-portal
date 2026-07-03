@@ -254,7 +254,7 @@
     <div style="display:flex;align-items:center;gap:10px">
       <span class="realtime-badge">Live</span>
       <span class="badge badge-admin">Administrator</span>
-      <button class="btn btn-sm" onclick="openMasterUpload()"><i class="ti ti-upload"></i> Upload master data</button>
+      <button class="btn btn-sm" onclick="requireOwner(openMasterUpload)"><i class="ti ti-upload"></i> Upload master data</button>
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
   </div>
@@ -299,7 +299,7 @@
           <select id="admin-cat-filter" onchange="renderAdminProducts()"><option value="">All categories</option></select>
           <input id="admin-prod-search" placeholder="Search..." oninput="renderAdminProducts()" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans)" />
           <div style="margin-left:auto;display:flex;gap:8px">
-            <button class="btn btn-sm" onclick="openAddProduct()"><i class="ti ti-plus"></i> Add product</button>
+            <button class="btn btn-sm" onclick="requireOwner(openAddProduct)"><i class="ti ti-plus"></i> Add product</button>
             <button class="btn btn-excel btn-sm" onclick="exportProducts()">
               <i class="ti ti-file-spreadsheet"></i> Export to Excel
             </button>
@@ -317,7 +317,7 @@
       <div id="ap-customers" style="display:none">
         <div class="page-title">Customers <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="cust-count-label"></span></div>
         <div class="filter-row" style="justify-content:flex-end;gap:8px">
-          <button class="btn btn-sm" onclick="openAddCustomer()"><i class="ti ti-plus"></i> Add customer</button>
+          <button class="btn btn-sm" onclick="requireOwner(openAddCustomer)"><i class="ti ti-plus"></i> Add customer</button>
           <button class="btn btn-sm" onclick="openPasswordManager()"><i class="ti ti-lock"></i> Manage Passwords</button>
           <button class="btn btn-excel btn-sm" onclick="exportCustomers()">
             <i class="ti ti-file-spreadsheet"></i> Export to Excel
@@ -361,6 +361,25 @@
     <div class="modal-actions">
       <button class="btn btn-sm" onclick="closeEditContact()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveEditContact()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="owner-gate-modal">
+  <div class="modal-box">
+    <div class="modal-title">Owner verification required</div>
+    <div style="font-size:12px;color:var(--color-text-secondary,#666);margin-bottom:10px">
+      Adding/editing products or customers, and master data upload, are owner-only actions.
+      Sign in with your Firebase owner account to continue (same login as "Manage Passwords").
+    </div>
+    <label>Owner email</label>
+    <input id="og-email" placeholder="you@example.com" />
+    <label>Owner password</label>
+    <input id="og-pw" type="password" placeholder="Firebase account password" onkeydown="if(event.key==='Enter')ownerGateSignIn()" />
+    <div class="modal-err" id="og-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeOwnerGate()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="ownerGateSignIn()">Sign in</button>
     </div>
   </div>
 </div>
@@ -931,7 +950,7 @@ function renderAdminProducts(){
       <td style="text-align:right">₹${p.mrp.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600;color:#0F6E56">₹${p.ptd.toFixed(2)}</td>
       <td style="text-align:right">${p.scheme?p.scheme+'%':'—'}</td>
-      <td><button class="btn btn-sm" onclick="openEditProduct('${p.code}')"><i class="ti ti-edit"></i> Edit</button></td>
+      <td><button class="btn btn-sm" onclick="requireOwner(()=>openEditProduct('${p.code}'))"><i class="ti ti-edit"></i> Edit</button></td>
     </tr>`).join('');
   document.getElementById('prod-count-label').textContent=`(${PRODUCTS.length} products)`;
 }
@@ -949,7 +968,7 @@ function renderAdminCustomers(){
       <td style="font-size:12px;color:var(--color-text-secondary)">${c.soName||'—'}</td>
       <td>${c.phone||'—'}</td>
       <td style="font-size:12px;color:var(--color-text-secondary)">${c.email||'—'}</td>
-      <td><button class="btn btn-sm" onclick="openEditContact('${c.code}')"><i class="ti ti-edit"></i> Edit</button></td>
+      <td><button class="btn btn-sm" onclick="requireOwner(()=>openEditContact('${c.code}'))"><i class="ti ti-edit"></i> Edit</button></td>
     </tr>`).join('');
 }
 
@@ -1015,6 +1034,51 @@ async function saveEditContact(){
     closeEditContact();
   }catch(e){
     errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+// ---- Owner-only gate for Add/Edit Product, Add/Edit Customer, Upload ----
+// The shared ADMIN_PASSWORD gets every manager into the admin screen, so it
+// cannot be trusted to protect catalogue/customer edits. This reuses the
+// same Firebase Auth sign-in as "Manage Passwords" - one owner session
+// unlocks all owner-only actions on this page. NOTE: this is a UI gate
+// only. The real lock has to be Firebase Database Rules that require
+// auth.uid == your owner UID to write to productOverrides, productAdditions,
+// customerAdditions and customerContacts - without that server-side rule,
+// a manager who opens devtools can still call these functions or write to
+// the database directly, regardless of what this modal shows.
+let _ownerGatePending=null;
+
+function requireOwner(action){
+  const {auth}=window._fbAuth;
+  if(auth && auth.currentUser){ action(); return; }
+  _ownerGatePending=action;
+  document.getElementById('og-email').value='';
+  document.getElementById('og-pw').value='';
+  document.getElementById('og-err').style.display='none';
+  document.getElementById('owner-gate-modal').classList.add('active');
+}
+function closeOwnerGate(){
+  document.getElementById('owner-gate-modal').classList.remove('active');
+  _ownerGatePending=null;
+}
+async function ownerGateSignIn(){
+  const email=document.getElementById('og-email').value.trim();
+  const pw=document.getElementById('og-pw').value;
+  const errEl=document.getElementById('og-err');
+  errEl.style.display='none';
+  if(!email||!pw){errEl.textContent='Enter email and password.';errEl.style.display='block';return;}
+  const {auth,signInWithEmailAndPassword}=window._fbAuth;
+  try{
+    await signInWithEmailAndPassword(auth,email,pw);
+    document.getElementById('og-pw').value='';
+    document.getElementById('owner-gate-modal').classList.remove('active');
+    const pending=_ownerGatePending;
+    _ownerGatePending=null;
+    if(pending) pending();
+  }catch(e){
+    errEl.textContent='Sign-in failed: '+e.message;
+    errEl.style.display='block';
   }
 }
 
