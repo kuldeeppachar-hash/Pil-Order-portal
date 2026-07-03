@@ -1,0 +1,1084 @@
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ---- Firebase wiring ----
+// Replaces the Claude-Artifacts-only window.storage stub with a real
+// backend: Firebase Realtime Database. Keeps the same get/set(key, shared)
+// interface so none of the app logic below has to change.
+const firebaseConfig = {
+  apiKey: "AIzaSyDlpaT_qSsB7AQ-cGYVwGRMMU8TMEfUmN0",
+  authDomain: "pil-order-portal.firebaseapp.com",
+  databaseURL: "https://pil-order-portal-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pil-order-portal",
+  storageBucket: "pil-order-portal.firebasestorage.app",
+  messagingSenderId: "578127995175",
+  appId: "1:578127995175:web:522fc71d8db3f7355a4902",
+  measurementId: "G-5SGNH02GDS"
+};
+firebase.initializeApp(firebaseConfig);
+const __fbdb = firebase.database();
+window.storage = {
+  get: function(key){
+    return __fbdb.ref(key).once('value').then(function(snap){
+      if(!snap.exists()) return null;
+      return { key: key, value: snap.val(), shared: true };
+    });
+  },
+  set: function(key, value){
+    return __fbdb.ref(key).set(value).then(function(){
+      return { key: key, value: value, shared: true };
+    });
+  }
+};
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:14px;color:var(--color-text-primary)}
+.screen{display:none;padding:0}
+.screen.active{display:block}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary)}
+.logo{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+.logo span{color:#1D9E75}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500}
+.badge-admin{background:#EEEDFE;color:#3C3489}
+.badge-cust{background:#E1F5EE;color:#085041}
+.btn{padding:7px 16px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+.btn:hover{background:var(--color-background-secondary)}
+.btn-primary{background:#1D9E75;color:#fff;border-color:#1D9E75}
+.btn-primary:hover{background:#0F6E56;border-color:#0F6E56}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-danger{background:var(--color-background-danger);color:var(--color-text-danger);border-color:var(--color-border-danger)}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem}
+.login-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:340px;gap:1rem}
+.login-tabs{display:flex;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden;width:280px}
+.ltab{flex:1;text-align:center;padding:8px;font-size:13px;cursor:pointer;background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.ltab.active{background:var(--color-background-primary);color:var(--color-text-primary);font-weight:500}
+.login-form{width:280px;display:flex;flex-direction:column;gap:10px}
+.login-form input{width:100%;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)}
+.login-form label{font-size:12px;color:var(--color-text-secondary)}
+.sidebar{width:180px;min-height:calc(100vh - 49px);border-right:0.5px solid var(--color-border-tertiary);padding:12px 0;background:var(--color-background-secondary);flex-shrink:0}
+.nav-item{display:flex;align-items:center;gap:8px;padding:9px 16px;cursor:pointer;font-size:13px;color:var(--color-text-secondary);border-left:2px solid transparent}
+.nav-item:hover{background:var(--color-background-primary);color:var(--color-text-primary)}
+.nav-item.active{color:#0F6E56;border-left-color:#1D9E75;background:var(--color-background-primary);font-weight:500}
+.nav-item i{font-size:16px}
+.main-layout{display:flex;min-height:calc(100vh - 49px)}
+.content{flex:1;padding:20px;overflow:auto}
+.page-title{font-size:17px;font-weight:500;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 10px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary);font-weight:500;font-size:12px;white-space:nowrap}
+td{padding:8px 10px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle}
+tr:hover td{background:var(--color-background-secondary)}
+.qty-input{width:68px;padding:4px 6px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);text-align:center;font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)}
+.cat-tag{font-size:11px;padding:2px 8px;border-radius:12px;background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.total-bar{position:sticky;bottom:0;background:var(--color-background-primary);border-top:0.5px solid var(--color-border-secondary);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px 16px}
+.stat-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px}
+.stat-val{font-size:22px;font-weight:500}
+.status-pill{font-size:11px;padding:2px 8px;border-radius:12px;font-weight:500}
+.s-pending{background:#FAEEDA;color:#854F0B}
+.s-confirmed{background:#E1F5EE;color:#085041}
+.s-new{background:#EEEDFE;color:#3C3489}
+.filter-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-row select,.filter-row input{padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)}
+.err{font-size:12px;color:var(--color-text-danger)}
+.success-banner{background:#E1F5EE;color:#0F6E56;padding:10px 14px;border-radius:var(--border-radius-md);font-size:13px;margin-bottom:12px;display:none}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-box{background:var(--color-background-primary);border-radius:var(--border-radius-lg);padding:1.5rem;width:420px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:14px}
+.form-grid{display:flex;flex-direction:column;gap:10px}
+.form-grid label{font-size:12px;color:var(--color-text-secondary);margin-bottom:3px;display:block}
+.form-grid input,.form-grid select{width:100%;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)}
+.form-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.icon-btn{background:none;border:0;cursor:pointer;color:var(--color-text-secondary);padding:4px 6px;border-radius:var(--border-radius-md);font-size:14px}
+.icon-btn:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+.icon-btn.danger:hover{color:var(--color-text-danger)}
+.toolbar-right{display:flex;gap:8px;margin-left:auto}
+.import-hint{font-size:11px;color:var(--color-text-secondary);margin-top:6px;line-height:1.5}
+.sync-note{font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:5px}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#1D9E75;display:inline-block}
+</style>
+
+<div id="s-login" class="screen active">
+  <div class="topbar"><span class="logo">PIL <span>Order Portal</span></span></div>
+  <div class="login-wrap">
+    <div class="login-tabs">
+      <div class="ltab active" onclick="setRole('customer')">Customer login</div>
+      <div class="ltab" onclick="setRole('admin')">Admin login</div>
+    </div>
+    <div class="login-form">
+      <div id="login-err" class="err" style="display:none"></div>
+      <div id="cust-select-wrap">
+        <label>Select your account</label>
+        <select id="cust-select" style="width:100%;padding:8px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)"></select>
+      </div>
+      <div>
+        <label>Password</label>
+        <input type="password" id="pw-input" placeholder="Enter password" />
+      </div>
+      <button class="btn btn-primary" id="sign-in-btn" onclick="doLogin()" style="width:100%;margin-top:4px">Sign in <i class="ti ti-arrow-right" aria-hidden="true"></i></button>
+      <p style="font-size:11px;color:var(--color-text-secondary);text-align:center">Demo: any password works</p>
+    </div>
+  </div>
+</div>
+
+<div id="s-customer" class="screen">
+  <div class="topbar">
+    <span class="logo">PIL <span>Order Portal</span></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="badge badge-cust" id="cust-name-badge"></span>
+      <button class="btn btn-sm" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+  <div class="main-layout">
+    <div class="sidebar">
+      <div class="nav-item active" onclick="custNav('order')" id="cnav-order"><i class="ti ti-shopping-cart" aria-hidden="true"></i> Order now</div>
+      <div class="nav-item" onclick="custNav('history')" id="cnav-history"><i class="ti ti-clock" aria-hidden="true"></i> My orders</div>
+    </div>
+    <div class="content">
+      <div id="cp-order">
+        <div class="success-banner" id="order-success">Order submitted successfully! Our team will confirm shortly.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="page-title" style="margin:0">Place an order</div>
+          <div style="display:flex;gap:8px">
+            <select id="cat-filter" onchange="renderProducts()" style="padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)"></select>
+            <input id="prod-search" placeholder="Search product..." oninput="renderProducts()" style="padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary);width:160px" />
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th><th style="text-align:right">MRP</th><th style="text-align:right">PTD</th><th style="text-align:center">Qty</th><th style="text-align:right">Amount (PTD)</th>
+            </tr></thead>
+            <tbody id="prod-tbody"></tbody>
+          </table>
+          </div>
+        </div>
+        <div class="total-bar">
+          <div style="font-size:13px;color:var(--color-text-secondary)">Items with qty: <strong id="item-count">0</strong></div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div>Order total (PTD): <strong id="order-total" style="font-size:16px">0.00</strong></div>
+            <button class="btn btn-primary" onclick="submitOrder()"><i class="ti ti-send" aria-hidden="true"></i> Submit order</button>
+          </div>
+        </div>
+      </div>
+      <div id="cp-history" style="display:none">
+        <div class="page-title">My orders</div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th>Order ID</th><th>Date</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th></tr></thead>
+            <tbody id="hist-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="s-admin" class="screen">
+  <div class="topbar">
+    <span class="logo">PIL <span>Order Portal</span> <span style="font-size:11px;color:var(--color-text-secondary);font-weight:400">— Admin</span></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="badge badge-admin">Administrator</span>
+      <button class="btn btn-sm" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+  <div class="main-layout">
+    <div class="sidebar">
+      <div class="nav-item active" onclick="adminNav('orders')" id="anav-orders"><i class="ti ti-clipboard-list" aria-hidden="true"></i> All orders</div>
+      <div class="nav-item" onclick="adminNav('products')" id="anav-products"><i class="ti ti-package" aria-hidden="true"></i> Products</div>
+      <div class="nav-item" onclick="adminNav('customers')" id="anav-customers"><i class="ti ti-users" aria-hidden="true"></i> Customers</div>
+    </div>
+    <div class="content">
+      <div id="ap-orders">
+        <div class="page-title">All orders</div>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-label">Total orders</div><div class="stat-val" id="st-total">0</div></div>
+          <div class="stat"><div class="stat-label">Pending</div><div class="stat-val" id="st-pending">0</div></div>
+          <div class="stat"><div class="stat-label">Confirmed</div><div class="stat-val" id="st-confirmed">0</div></div>
+        </div>
+        <div class="filter-row">
+          <select id="admin-cust-filter" onchange="renderAdminOrders()"><option value="">All customers</option></select>
+          <select id="admin-status-filter" onchange="renderAdminOrders()">
+            <option value="">All statuses</option><option>New</option><option>Pending</option><option>Confirmed</option>
+          </select>
+          <button class="btn btn-sm" onclick="manualRefreshAdminOrders()" style="margin-left:auto"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="admin-order-tbody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+      <div id="ap-products" style="display:none">
+        <div class="page-title">Product catalogue</div>
+        <div class="filter-row">
+          <select id="admin-cat-filter" onchange="renderAdminProducts()"><option value="">All categories</option></select>
+          <input id="admin-prod-search" placeholder="Search..." oninput="renderAdminProducts()" style="padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)" />
+          <div class="toolbar-right">
+            <button class="btn btn-sm" onclick="downloadProductTemplate()"><i class="ti ti-download" aria-hidden="true"></i> Template</button>
+            <button class="btn btn-sm" onclick="triggerProductImport()"><i class="ti ti-upload" aria-hidden="true"></i> Import Excel</button>
+            <input type="file" id="product-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleProductImport(event)" />
+            <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="ti ti-plus" aria-hidden="true"></i> Add product</button>
+          </div>
+        </div>
+        <div id="product-import-result" class="success-banner"></div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th><th style="text-align:right">MRP</th><th style="text-align:right">PTD</th><th style="text-align:right">PTR</th><th>Actions</th></tr></thead>
+            <tbody id="admin-prod-tbody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+      <div id="ap-customers" style="display:none">
+        <div class="page-title">Customers</div>
+        <div class="filter-row">
+          <input id="admin-cust-search" placeholder="Search..." oninput="renderAdminCustomers()" style="padding:6px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)" />
+          <div class="toolbar-right">
+            <button class="btn btn-sm" onclick="downloadCustomerTemplate()"><i class="ti ti-download" aria-hidden="true"></i> Template</button>
+            <button class="btn btn-sm" onclick="triggerCustomerImport()"><i class="ti ti-upload" aria-hidden="true"></i> Import Excel</button>
+            <input type="file" id="customer-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleCustomerImport(event)" />
+            <button class="btn btn-primary btn-sm" onclick="openCustomerModal()"><i class="ti ti-plus" aria-hidden="true"></i> Add customer</button>
+          </div>
+        </div>
+        <div id="customer-import-result" class="success-banner"></div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>City</th><th>State</th><th>Phone</th><th>Email</th><th>Actions</th></tr></thead>
+            <tbody id="admin-cust-tbody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product add/edit modal -->
+<div id="product-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title" id="product-modal-title">Add product</div>
+    <div class="form-grid">
+      <input type="hidden" id="pm-original-code" />
+      <div>
+        <label>Item code</label>
+        <input id="pm-code" placeholder="e.g. 30000826" />
+      </div>
+      <div>
+        <label>Product name</label>
+        <input id="pm-name" placeholder="e.g. A-4 CREAM 1X15G" />
+      </div>
+      <div class="form-row2">
+        <div>
+          <label>Category</label>
+          <input id="pm-cat" list="pm-cat-list" placeholder="e.g. Skin Care" />
+          <datalist id="pm-cat-list"></datalist>
+        </div>
+        <div>
+          <label>UOM</label>
+          <input id="pm-uom" placeholder="e.g. PCS / BOX" />
+        </div>
+      </div>
+      <div class="form-row2">
+        <div>
+          <label>MRP</label>
+          <input id="pm-mrp" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div>
+          <label>PTD</label>
+          <input id="pm-ptd" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+      </div>
+      <div id="product-modal-err" class="err" style="display:none"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeProductModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveProductModal()">Save product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customer add/edit modal -->
+<div id="customer-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title" id="customer-modal-title">Add customer</div>
+    <div class="form-grid">
+      <input type="hidden" id="cm-original-code" />
+      <div>
+        <label>Customer code</label>
+        <input id="cm-code" placeholder="e.g. 2002295" />
+      </div>
+      <div>
+        <label>Name</label>
+        <input id="cm-name" placeholder="e.g. ABHIKALP MEDICAL STORE" />
+      </div>
+      <div class="form-row2">
+        <div>
+          <label>City</label>
+          <input id="cm-city" placeholder="e.g. ETAH" />
+        </div>
+        <div>
+          <label>State</label>
+          <input id="cm-state" placeholder="e.g. UTTAR PRADESH" />
+        </div>
+      </div>
+      <div class="form-row2">
+        <div>
+          <label>Phone</label>
+          <input id="cm-phone" placeholder="10-digit number" />
+        </div>
+        <div>
+          <label>Email</label>
+          <input id="cm-email" placeholder="name@example.com" />
+        </div>
+      </div>
+      <div id="customer-modal-err" class="err" style="display:none"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeCustomerModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveCustomerModal()">Save customer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SEED_PRODUCTS=[
+{code:"24000012",name:"MYCONORM POWDER 1X75gm",cat:"Skin Care",uom:"PCS",mrp:95.85,ptd:30.0},
+{code:"24000047",name:"POVIPIL OINTMENT 1X20G",cat:"Wound Care",uom:"PCS",mrp:56.7,ptd:15.0},
+{code:"24000048",name:"POVIPIL SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:47.25,ptd:22.5},
+{code:"24000065",name:"ANTI TICK POWDER 1X100GM",cat:"Pet Care",uom:"PCS",mrp:198.5,ptd:70.0},
+{code:"24000115",name:"NASOPIL ADULT NASAL DROPS 1X10ml",cat:"ENT / Respiratory",uom:"PCS",mrp:53.75,ptd:16.0},
+{code:"24000116",name:"NASOPIL PAEDIATRIC NASAL DROPS 1X10ML",cat:"ENT / Respiratory",uom:"PCS",mrp:43.98,ptd:16.0},
+{code:"24000132",name:"ORTHODEX SPRAY 1X60GM",cat:"Ortho / Pain",uom:"PCS",mrp:165.0,ptd:57.0},
+{code:"24000152",name:"PIL'S D3 ORAL SOLUTION 4X5ML",cat:"Vitamins / Nutrition",uom:"BOX",mrp:70.0,ptd:55.0},
+{code:"24000153",name:"POVIPIL GARGLE SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:150.0,ptd:27.0},
+{code:"24000169",name:"ORTHODEX ROLL ON 1X50GM",cat:"Ortho / Pain",uom:"PCS",mrp:145.31,ptd:50.0},
+{code:"24000205",name:"PIL TEARS EYE DROPS 20X10ML (KIT)",cat:"Ophthalmic",uom:"PKT",mrp:2861.4,ptd:265.0},
+{code:"24000209",name:"NEUROVITE CAPSULE 15X1X10",cat:"Vitamins / Nutrition",uom:"BOX",mrp:1835.25,ptd:175.0},
+{code:"24000211",name:"MULTIZAC FORTE SYRUP 1X200ML",cat:"Vitamins / Nutrition",uom:"PCS",mrp:146.82,ptd:38.5},
+{code:"24000236",name:"Dr. Pil SOTHREX TULSI LOZENGES 150X1 Tab",cat:"ENT / Respiratory",uom:"BOX",mrp:225.0,ptd:100.0},
+{code:"24000238",name:"Dr. Pil  Pregnancy Test Kit (25x1 KIT)",cat:"Diagnostics",uom:"BOX",mrp:1250.0,ptd:135.0},
+{code:"30000488",name:"SNEECURE EXTRA (30X10 TABS)",cat:"ENT / Respiratory",uom:"BOX",mrp:1493.1,ptd:330.0},
+{code:"30000495",name:"MANPIL-100 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4929.4,ptd:180.0},
+{code:"30000496",name:"POWERMAN-100(30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4529.4,ptd:180.0},
+{code:"30000497",name:"MANPIL-50 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2882.1,ptd:125.0},
+{code:"30000605",name:"ACNE DERMA SOAP 1X75gm",cat:"Skin Care",uom:"PCS",mrp:91.2,ptd:25.0},
+{code:"30000608",name:"PRICKLY HEAT SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:80.75,ptd:30.0},
+{code:"30000611",name:"DANCURE SHAMPOO 1X50ml",cat:"Skin Care",uom:"PCS",mrp:109.8,ptd:35.0},
+{code:"30000616",name:"SOTHREX TULSI SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:113.24,ptd:27.5},
+{code:"30000641",name:"HEAD LICE SOAP 1X75gm",cat:"Head Lice",uom:"PCS",mrp:97.7,ptd:28.0},
+{code:"30000661",name:"ORTHODEX GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:115.29,ptd:22.0},
+{code:"30000662",name:"ORTHODEX GEL 1X15G",cat:"Ortho / Pain",uom:"PCS",mrp:72.05,ptd:16.0},
+{code:"30000664",name:"SOTHREX-PLUS SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:98.13,ptd:27.0},
+{code:"30000673",name:"ULSOR MOUTH GEL 1X10G",cat:"ENT / Respiratory",uom:"PCS",mrp:72.05,ptd:15.75},
+{code:"30000691",name:"SCABEPIL SOAP 1*75G",cat:"Skin Care",uom:"PCS",mrp:106.48,ptd:26.0},
+{code:"30000702",name:"NEEM PLUS HERBAL DENTAL GEL 1X100G",cat:"Dental",uom:"PCS",mrp:115.0,ptd:42.0},
+{code:"30000705",name:"HEAD LICE SHAMPOO 1X50ml",cat:"Head Lice",uom:"PCS",mrp:102.09,ptd:39.5},
+{code:"30000722",name:"NEEM & MINT PRICKLY HEAT SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:35.0},
+{code:"30000751",name:"LACTOPIL  SOLUTION 1X100ML",cat:"Pet Care",uom:"PCS",mrp:131.25,ptd:65.0},
+{code:"30000761",name:"LACTOPIL SOLUTION 1X200ml",cat:"Pet Care",uom:"PCS",mrp:262.5,ptd:130.0},
+{code:"30000773",name:"TICK & FLEA SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:296.0,ptd:93.5},
+{code:"30000778",name:"TICK & FLEA SHAMPOO 1X500ml",cat:"Pet Care",uom:"PCS",mrp:535.0,ptd:170.0},
+{code:"30000784",name:"TICK & FLEA SHAMPOO 1X1000ml",cat:"Pet Care",uom:"PCS",mrp:880.0,ptd:275.0},
+{code:"30000793",name:"TICK & FLEA SOAP 1X100gm",cat:"Pet Care",uom:"PCS",mrp:113.05,ptd:39.6},
+{code:"30000800",name:"ACNEDERMA FOAM FACE WASH GEL 1X150ml",cat:"Skin Care",uom:"PCS",mrp:272.25,ptd:84.0},
+{code:"30000813",name:"ORTHODEX GEL 1X50G",cat:"Ortho / Pain",uom:"PCS",mrp:150.98,ptd:35.0},
+{code:"30000823",name:"HEAD LICE SHAMPOO 1X30ml",cat:"Head Lice",uom:"PCS",mrp:72.05,ptd:34.5},
+{code:"30000826",name:"A-4 CREAM 1X15G",cat:"Skin Care",uom:"PCS",mrp:82.29,ptd:15.25},
+{code:"30001385",name:"PETGROW FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:275.0,ptd:71.5},
+{code:"30001504",name:"SMART PET FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:272.25,ptd:60.5},
+{code:"30001785",name:"DERMOPIL PET SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:292.0,ptd:88.0},
+{code:"30001841",name:"DERMACARE NIP CARE CREAM (1X30GM)",cat:"Skin Care",uom:"PCS",mrp:155.7,ptd:48.5},
+{code:"30001841",name:"DERMACARE NIPCARE CREAM",cat:"Skin Care",uom:"PCS",mrp:175.2,ptd:49.5},
+{code:"30001869",name:"CALPIL PET FEED SUPP. SYRUP 1X200ml",cat:"Pet Care",uom:"PCS",mrp:158.8,ptd:42.0},
+{code:"30001876",name:"MANPIL SUPER-20 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4941.0,ptd:170.0},
+{code:"30001886",name:"SCARNIL CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:382.5,ptd:138.0},
+{code:"30002100",name:"SEBO PLUS SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:111.0,ptd:36.0},
+{code:"30002287",name:"PIL'S HEEL & FOOT CREAM 1X30gm",cat:"Skin Care",uom:"PCS",mrp:133.2,ptd:35.0},
+{code:"30002288",name:"DERMACARE NEEM PLUS FACE WASH GEL(1X50G)",cat:"Skin Care",uom:"PCS",mrp:151.5,ptd:32.0},
+{code:"30002307",name:"NAPY SOFT CREAM  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:133.0,ptd:35.0},
+{code:"30002308",name:"PIL UV SOFT CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:283.5,ptd:65.0},
+{code:"30002423",name:"SOTHREX TULSI SYRUP 1X60ML (CARTON PACK)",cat:"ENT / Respiratory",uom:"PCS",mrp:83.04,ptd:18.0},
+{code:"30002474",name:"ACNEDERMA GENTLE FACE WASH GEL 1x60GM",cat:"Skin Care",uom:"PCS",mrp:181.5,ptd:42.5},
+{code:"30002568",name:"SENSOPIL  GEL  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:88.5,ptd:26.5},
+{code:"30002763",name:"SOTHREX BR SYRUP 1X100ML",cat:"ENT / Respiratory",uom:"PCS",mrp:87.5,ptd:26.5},
+{code:"30002804",name:"DERMACARE NEEM AND ALOEVERA SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:30.0},
+{code:"30002830",name:"DA' MANPIL (30*1*4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:5400.0,ptd:600.0},
+{code:"30002848",name:"SENSOPIL GEL 1X125GM",cat:"Skin Care",uom:"PCS",mrp:146.0,ptd:50.0},
+{code:"30002963",name:"TOPVITE-PLUS (10X1X10 CAPS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2109.3,ptd:250.0},
+{code:"30002980",name:"TOPVITE-FORTE (10X15 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2648.7,ptd:425.0},
+{code:"30003024",name:"NEEM PLUS HERBAL DENTAL GEL ( 1X50 GM )",cat:"Dental",uom:"PCS",mrp:66.5,ptd:23.0},
+{code:"30003092",name:"TEMPCON-EXTRA (10X2X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:937.6,ptd:180.0},
+{code:"30003106",name:"ORTHODEX-DS GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:121.87,ptd:24.0},
+{code:"30003133",name:"PIL UV SOFT LOTION 1X50ML",cat:"Skin Care",uom:"PCS",mrp:350.0,ptd:150.0},
+{code:"30003149",name:"TROMAMOL PLUS(22X5X10 TABS) CEL.PACK",cat:"Pain Management",uom:"BOX",mrp:5474.0,ptd:660.0},
+{code:"30003150",name:"TEMPCON-650(10X5X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:0.0,ptd:363.64},
+{code:"30003161",name:"MOUTH ULSOR TABS (20X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:1773.6,ptd:160.0},
+{code:"30003208",name:"CREMAPIL PLUS SUSPENSION 200 ML",cat:"ENT / Respiratory",uom:"PCS",mrp:102.31,ptd:32.0},
+{code:"30003210",name:"ALERGIPIL-180 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2250.0,ptd:275.0},
+{code:"30003227",name:"ALERGIPIL-M 120 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2500.0,ptd:225.0},
+{code:"30003179",name:"TEMPCON-EXTRA (2X10 TABS)",cat:"Pain Management",uom:"Free Gifts",mrp:0.0,ptd:0.0},
+{code:"30002721",name:"NEEM PLUS HERBAL DENTAL GEL 100G KIT PACK",cat:"Dental",uom:"Free Gifts",mrp:0.0,ptd:0.0}
+];
+
+const SEED_CUSTOMERS=[
+{code:"2000549",name:"TULSI PHARMACEUTICALS ( MUZAFFAR NA",city:"MUZAFFAR NAGAR",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002243",name:"MEHAK DISTRIBUTORS",city:"HARIDWAR",state:"UTTARAKHAND",phone:"",email:""},
+{code:"2002245",name:"FRIENDS DRUG HOUSE",city:"SAHARANPUR",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002246",name:"JK MEDICAL AGENCY",city:"SAWAI MADHOPUR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002257",name:"POPULAR AGENCIES",city:"KOTA",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002258",name:"LIFE CARE ENTERPRISES",city:"Moradabad",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002274",name:"MAHADEV PHARMA",city:"JHALAWAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002276",name:"KD MEDICAL AGENCY",city:"Hanumangarh",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002280",name:"NEW RAJASTHAN MEDICAL AGENCY",city:"ALWAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002281",name:"SOPHISTICATE DISTRIBUTOR",city:"JODHPUR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002284",name:"MEDIPLUS HEALTHCARE",city:"JODHPUR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002306",name:"VARDAAN ENTERPRISES",city:"DEHRADUN",state:"UTTARAKHAND",phone:"",email:""},
+{code:"2002307",name:"KUMAR ENTERPRISES",city:"HARIDWAR",state:"UTTARAKHAND",phone:"",email:""},
+{code:"2002309",name:"AS PHARMACEUTICAL",city:"AGRA",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002314",name:"BHOLA JI PHARMA",city:"NEW DELHI",state:"DELHI",phone:"",email:""},
+{code:"2002318",name:"ARSH MEDICAL AGENCY",city:"MATHURA",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002327",name:"M- ZONE PASSION PRIVATE LIMITED",city:"DELHI",state:"DELHI",phone:"",email:""},
+{code:"2002334",name:"DS MEDICOS",city:"GHAZIABAD",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002335",name:"KUSUM PHARMACEUTICALS",city:"SAHARANPUR",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002336",name:"MILLENIUM PHARMACY",city:"SIRSA",state:"HARYANA",phone:"",email:""},
+{code:"2002337",name:"NK TRADERS",city:"FATEHABAD",state:"HARYANA",phone:"",email:""},
+{code:"2002338",name:"RELIWELL PHARMA",city:"PANIPAT",state:"HARYANA",phone:"",email:""},
+{code:"2002339",name:"AHUJA PHARMA",city:"SONIPAT",state:"HARYANA",phone:"",email:""},
+{code:"2002340",name:"SHREE SHYAM PHARMA",city:"BHIWANI",state:"HARYANA",phone:"",email:""},
+{code:"2002344",name:"AGARWAL MEDICOSE",city:"AMROHA",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002347",name:"TEJ VASHISHTH PHARMACEUTICAL",city:"PALWAL",state:"HARYANA",phone:"",email:""},
+{code:"2002348",name:"INDU PHARMA",city:"ROHTAK",state:"HARYANA",phone:"",email:""},
+{code:"2002349",name:"MD MEDICAL AGENCY",city:"SIKAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002356",name:"SHRI SHYAM LAL MEDICAL AGENCY",city:"GHAZIABAD",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002357",name:"GOYAL MEDICOSE",city:"SIKAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002365",name:"AVNI PHARMA",city:"MEERUT",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002366",name:"GAURAV MEDICAL AGENCY",city:"MEERUT",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002367",name:"SIDHARTH AYURVEDIC",city:"",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002368",name:"AAYUSH DISTRIBUTORS",city:"HANSI",state:"HARYANA",phone:"",email:""},
+{code:"2002380",name:"TANEJA ENTERPRISES",city:"YAMUNANAGAR",state:"HARYANA",phone:"",email:""},
+{code:"2002381",name:"KAMLESH DRUG DISTRIBUTORS",city:"AJMER",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002382",name:"HARYANA PHARMA",city:"FARIDABAD",state:"HARYANA",phone:"",email:""},
+{code:"2002385",name:"SP AGENCY",city:"DEHRADUN",state:"UTTARAKHAND",phone:"",email:""},
+{code:"2002386",name:"SHANKAR MEDICAL AGENCIES",city:"SRI GANGANAGAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002404",name:"MEDICARE PHARMACY",city:"JIND",state:"HARYANA",phone:"",email:""},
+{code:"2002405",name:"MUKESH MEDICAL AGENCIES",city:"",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002415",name:"NAVKAR PHARMA",city:"KEKRI (AJMER)",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002416",name:"SIHAG MEDICAL AGENCY",city:"HISSAR",state:"HARYANA",phone:"",email:""},
+{code:"2002420",name:"AGGARWAL MEDICAL AGENCY",city:"",state:"HARYANA",phone:"",email:""},
+{code:"2002441",name:"RIYA ENTERPRISES",city:"JODHPUR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002450",name:"VEDACURE PHARMA",city:"KARNAL",state:"HARYANA",phone:"",email:""},
+{code:"2002475",name:"NATIONAL PHARMA",city:"REWARI",state:"HARYANA",phone:"",email:""},
+{code:"2002476",name:"SACHIN MEDICAL AGENCY",city:"TOHANA",state:"HARYANA",phone:"",email:""},
+{code:"2002479",name:"CHETNA PHARMA DISTRIBUTORS",city:"SIKAR",state:"RAJASTHAN",phone:"",email:""},
+{code:"2002486",name:"SG PHARMA",city:"PALWAL",state:"HARYANA",phone:"",email:""},
+{code:"2002487",name:"SHREE GOVIND ENTERPRISES",city:"CHANDIGARH",state:"CHANDIGARH",phone:"",email:""},
+{code:"2002491",name:"SATKARTAR DISTRIBUTOR",city:"FEROZEPUR",state:"PUNJAB",phone:"",email:""},
+{code:"2002492",name:"AR MEDICAL AGENCIES",city:"BHATINDA",state:"PUNJAB",phone:"",email:""},
+{code:"2002493",name:"HIGH LAND TRADERS",city:"KANGRA",state:"HIMACHAL PRADESH",phone:"",email:""},
+{code:"2002497",name:"LUCKY TRADER CO.",city:"MOGA",state:"PUNJAB",phone:"",email:""},
+{code:"2002498",name:"BROTHERS MEDICOSE",city:"PANIPAT",state:"HARYANA",phone:"",email:""},
+{code:"2002509",name:"GUNINAA PHARMACEUTICALS PRIVATE LIMITED",city:"BAREILLY",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002511",name:"EMM MEDICOSE",city:"YAMUNA NAGAR",state:"HARYANA",phone:"",email:""},
+{code:"2002515",name:"SEEMA MEDICOS",city:"FAZILKA",state:"PUNJAB",phone:"",email:""},
+{code:"2002517",name:"PLATINUM ENTERPRISES",city:"JALANDHAR",state:"PUNJAB",phone:"",email:""},
+{code:"2002520",name:"S.K PHARMA",city:"JAIPUR",state:"RAJASTHAN",phone:"",email:""}
+];
+
+let currentRole=null,currentCustomer=null,orders=[],loginRole='customer';
+let orderIdCounter=1001;
+let pollTimer=null;
+let PRODUCTS=[];
+let CUSTOMERS=[];
+let catalogLoaded=false;
+
+// ---- Shared persistence layer ----
+// Orders, products, and customers all live under shared storage keys so
+// every browser/tab/device (customer or admin) reads and writes the SAME
+// data instead of each session keeping its own private in-memory copy
+// that never syncs. The SEED_PRODUCTS / SEED_CUSTOMERS arrays above are
+// only used to populate storage the very first time this ever runs;
+// after that, storage is the single source of truth and the seed
+// arrays are ignored.
+
+async function loadCatalogFromStorage(){
+  try{
+    const pres=await window.storage.get('products-all',true);
+    PRODUCTS=pres&&pres.value?JSON.parse(pres.value):SEED_PRODUCTS.slice();
+  }catch(e){
+    PRODUCTS=SEED_PRODUCTS.slice();
+    await saveProductsToStorage(); // first run ever - seed it
+  }
+  try{
+    const cres=await window.storage.get('customers-all',true);
+    CUSTOMERS=cres&&cres.value?JSON.parse(cres.value):SEED_CUSTOMERS.slice();
+  }catch(e){
+    CUSTOMERS=SEED_CUSTOMERS.slice();
+    await saveCustomersToStorage(); // first run ever - seed it
+  }
+  catalogLoaded=true;
+}
+
+async function saveProductsToStorage(){
+  try{
+    await window.storage.set('products-all',JSON.stringify(PRODUCTS),true);
+  }catch(e){
+    console.error('Failed to save products to storage',e);
+    alert('Could not save product data right now. Please check your connection and try again.');
+  }
+}
+
+async function saveCustomersToStorage(){
+  try{
+    await window.storage.set('customers-all',JSON.stringify(CUSTOMERS),true);
+  }catch(e){
+    console.error('Failed to save customers to storage',e);
+    alert('Could not save customer data right now. Please check your connection and try again.');
+  }
+}
+
+async function loadOrdersFromStorage(){
+  try{
+    const res=await window.storage.get('orders-all',true);
+    if(res&&res.value){
+      const parsed=JSON.parse(res.value);
+      orders=parsed.orders||[];
+      orderIdCounter=parsed.orderIdCounter||orderIdCounter;
+    }
+  }catch(e){
+    // key doesn't exist yet (first run ever) - that's fine, keep orders=[]
+  }
+}
+
+async function saveOrdersToStorage(){
+  try{
+    await window.storage.set('orders-all',JSON.stringify({orders,orderIdCounter}),true);
+  }catch(e){
+    console.error('Failed to save orders to storage',e);
+    alert('Could not save order data right now. Please check your connection and try again.');
+  }
+}
+
+function startPolling(){
+  if(pollTimer) return;
+  pollTimer=setInterval(async()=>{
+    await loadOrdersFromStorage();
+    if(currentRole==='admin'){
+      if(document.getElementById('ap-orders').style.display!=='none') renderAdminOrders();
+      else updateAdminStats();
+    }
+    if(currentRole==='customer'&&document.getElementById('cp-history').style.display!=='none') renderHistory();
+  },4000);
+}
+
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+}
+
+function setRole(r){
+  loginRole=r;
+  document.querySelectorAll('.ltab').forEach((t,i)=>{t.classList.toggle('active',(r==='customer'&&i===0)||(r==='admin'&&i===1))});
+  document.getElementById('cust-select-wrap').style.display=r==='customer'?'block':'none';
+}
+
+async function doLogin(){
+  const pw=document.getElementById('pw-input').value;
+  const err=document.getElementById('login-err');
+  if(!pw){err.textContent='Enter a password.';err.style.display='block';return;}
+  err.style.display='none';
+  await loadCatalogFromStorage();
+  await loadOrdersFromStorage();
+  if(loginRole==='admin'){
+    currentRole='admin';
+    showScreen('s-admin');
+    buildCatFilter();
+    renderAdminOrders();renderAdminProducts();renderAdminCustomers();
+  } else {
+    const sel=document.getElementById('cust-select');
+    currentCustomer=CUSTOMERS.find(c=>c.code===sel.value);
+    if(!currentCustomer){err.textContent='Please select a valid customer account.';err.style.display='block';return;}
+    currentRole='customer';
+    document.getElementById('cust-name-badge').textContent=currentCustomer.name;
+    showScreen('s-customer');
+    buildCatFilter();renderProducts();
+  }
+  startPolling();
+}
+
+function logout(){stopPolling();currentRole=null;currentCustomer=null;document.getElementById('pw-input').value='';showScreen('s-login');}
+
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+async function custNav(p){
+  ['order','history'].forEach(x=>{
+    document.getElementById('cp-'+x).style.display=x===p?'block':'none';
+    document.getElementById('cnav-'+x).classList.toggle('active',x===p);
+  });
+  if(p==='history'){await loadOrdersFromStorage();renderHistory();}
+  if(p==='order'){await loadCatalogFromStorage();buildCatFilter();renderProducts();}
+}
+
+async function adminNav(p){
+  ['orders','products','customers'].forEach(x=>{
+    document.getElementById('ap-'+x).style.display=x===p?'block':'none';
+    document.getElementById('anav-'+x).classList.toggle('active',x===p);
+  });
+  if(p==='orders'){await loadOrdersFromStorage();renderAdminOrders();}
+  if(p==='products'){await loadCatalogFromStorage();buildCatFilter();renderAdminProducts();}
+  if(p==='customers'){await loadCatalogFromStorage();renderAdminCustomers();}
+}
+
+function getCats(){return [...new Set(PRODUCTS.map(p=>p.cat))];}
+
+function buildCatFilter(){
+  const cats=getCats();
+  const sel=document.getElementById('cat-filter');
+  const prevVal=sel.value;
+  sel.innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${c}</option>`).join('');
+  sel.value=cats.includes(prevVal)?prevVal:'';
+  const asel=document.getElementById('admin-cat-filter');
+  const prevAVal=asel.value;
+  asel.innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${c}</option>`).join('');
+  asel.value=cats.includes(prevAVal)?prevAVal:'';
+}
+
+function getFilteredProducts(){
+  const cat=document.getElementById('cat-filter').value;
+  const q=(document.getElementById('prod-search').value||'').toLowerCase();
+  return PRODUCTS.filter(p=>(!cat||p.cat===cat)&&(!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q)));
+}
+
+function renderProducts(){
+  const prods=getFilteredProducts();
+  const tbody=document.getElementById('prod-tbody');
+  if(!prods.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--color-text-secondary);padding:24px">No products found.</td></tr>';return;}
+  tbody.innerHTML=prods.map(p=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(p.code)}</td>
+      <td style="font-weight:500;max-width:220px">${escapeHtml(p.name)}</td>
+      <td><span class="cat-tag">${escapeHtml(p.cat)}</span></td>
+      <td>${escapeHtml(p.uom)}</td>
+      <td style="text-align:right">${p.mrp.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:500">${p.ptd.toFixed(2)}</td>
+      <td style="text-align:center"><input type="number" min="0" step="1" class="qty-input" id="qty-${escapeAttr(p.code)}" value="" placeholder="0" oninput="calcTotal()" /></td>
+      <td style="text-align:right;font-weight:500" id="amt-${escapeAttr(p.code)}">—</td>
+    </tr>`).join('');
+  calcTotal();
+}
+
+function calcTotal(){
+  let total=0,count=0;
+  PRODUCTS.forEach(p=>{
+    const inp=document.getElementById('qty-'+p.code);
+    if(!inp) return;
+    const qty=parseInt(inp.value)||0;
+    const amt=qty*p.ptd;
+    const cell=document.getElementById('amt-'+p.code);
+    if(cell) cell.textContent=qty>0?amt.toFixed(2):'—';
+    if(qty>0){total+=amt;count++;}
+  });
+  document.getElementById('order-total').textContent=total.toFixed(2);
+  document.getElementById('item-count').textContent=count;
+}
+
+async function submitOrder(){
+  const items=[];
+  PRODUCTS.forEach(p=>{
+    const inp=document.getElementById('qty-'+p.code);
+    if(!inp) return;
+    const qty=parseInt(inp.value)||0;
+    if(qty>0) items.push({code:p.code,name:p.name,qty,ptd:p.ptd,uom:p.uom,amount:qty*p.ptd});
+  });
+  if(!items.length){alert('Please enter quantity for at least one product.');return;}
+  const total=items.reduce((s,i)=>s+i.amount,0);
+  await loadOrdersFromStorage(); // pull latest before appending, in case admin/another tab changed things
+  orders.push({id:'ORD-'+orderIdCounter++,customer:currentCustomer,items,total,date:new Date().toLocaleDateString('en-IN'),status:'New'});
+  await saveOrdersToStorage();
+  document.querySelectorAll('.qty-input').forEach(i=>i.value='');
+  calcTotal();
+  const banner=document.getElementById('order-success');
+  banner.style.display='block';
+  setTimeout(()=>banner.style.display='none',4000);
+}
+
+function renderHistory(){
+  const myOrders=orders.filter(o=>o.customer.code===currentCustomer.code);
+  const tbody=document.getElementById('hist-tbody');
+  if(!myOrders.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--color-text-secondary);padding:24px">No orders placed yet.</td></tr>';return;}
+  tbody.innerHTML=myOrders.map(o=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${o.id}</td>
+      <td>${o.date}</td>
+      <td>${o.items.length} item${o.items.length>1?'s':''}</td>
+      <td style="text-align:right;font-weight:500">${o.total.toFixed(2)}</td>
+      <td><span class="status-pill s-${o.status.toLowerCase()}">${o.status}</span></td>
+    </tr>`).join('');
+}
+
+function updateAdminStats(){
+  document.getElementById('st-total').textContent=orders.length;
+  document.getElementById('st-pending').textContent=orders.filter(o=>o.status==='Pending').length;
+  document.getElementById('st-confirmed').textContent=orders.filter(o=>o.status==='Confirmed').length;
+}
+
+async function manualRefreshAdminOrders(){
+  await loadOrdersFromStorage();
+  renderAdminOrders();
+}
+
+function renderAdminOrders(){
+  updateAdminStats();
+  const cf=document.getElementById('admin-cust-filter').value;
+  const sf=document.getElementById('admin-status-filter').value;
+  const filtered=orders.filter(o=>(!cf||o.customer.code===cf)&&(!sf||o.status===sf));
+  const tbody=document.getElementById('admin-order-tbody');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--color-text-secondary);padding:24px">No orders yet.</td></tr>';return;}
+  tbody.innerHTML=filtered.map(o=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${o.id}</td>
+      <td>${o.date}</td>
+      <td style="font-weight:500">${o.customer.name}</td>
+      <td>${o.items.length} items</td>
+      <td style="text-align:right;font-weight:500">${o.total.toFixed(2)}</td>
+      <td><span class="status-pill s-${o.status.toLowerCase()}">${o.status}</span></td>
+      <td>
+        <select onchange="changeStatus('${o.id}',this.value)" style="padding:3px 6px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;font-family:var(--font-sans);background:var(--color-background-primary);color:var(--color-text-primary)">
+          <option ${o.status==='New'?'selected':''}>New</option>
+          <option ${o.status==='Pending'?'selected':''}>Pending</option>
+          <option ${o.status==='Confirmed'?'selected':''}>Confirmed</option>
+        </select>
+      </td>
+    </tr>`).join('');
+}
+
+async function changeStatus(oid,val){
+  const o=orders.find(x=>x.id===oid);
+  if(o){
+    o.status=val;
+    await saveOrdersToStorage();
+    renderAdminOrders();
+  }
+}
+
+function renderAdminProducts(){
+  const cat=document.getElementById('admin-cat-filter').value;
+  const q=(document.getElementById('admin-prod-search').value||'').toLowerCase();
+  const prods=PRODUCTS.filter(p=>(!cat||p.cat===cat)&&(!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q)));
+  if(!prods.length){document.getElementById('admin-prod-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--color-text-secondary);padding:24px">No products found.</td></tr>';return;}
+  document.getElementById('admin-prod-tbody').innerHTML=prods.map(p=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(p.code)}</td>
+      <td style="font-weight:500">${escapeHtml(p.name)}</td>
+      <td><span class="cat-tag">${escapeHtml(p.cat)}</span></td>
+      <td>${escapeHtml(p.uom)}</td>
+      <td style="text-align:right">${p.mrp.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:500">${p.ptd.toFixed(2)}</td>
+      <td style="text-align:right">${(p.ptd*1.2).toFixed(2)}</td>
+      <td>
+        <button class="icon-btn" title="Edit" onclick="openProductModal('${escapeAttr(p.code)}')"><i class="ti ti-edit" aria-hidden="true"></i></button>
+        <button class="icon-btn danger" title="Delete" onclick="deleteProduct('${escapeAttr(p.code)}')"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderAdminCustomers(){
+  const acf=document.getElementById('admin-cust-filter');
+  const prevVal=acf.value;
+  acf.innerHTML='<option value="">All customers</option>'+CUSTOMERS.map(c=>`<option value="${escapeAttr(c.code)}">${escapeHtml(c.name)}</option>`).join('');
+  acf.value=CUSTOMERS.some(c=>c.code===prevVal)?prevVal:'';
+  const q=(document.getElementById('admin-cust-search')?.value||'').toLowerCase();
+  const list=CUSTOMERS.filter(c=>!q||c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)||c.city.toLowerCase().includes(q));
+  if(!list.length){document.getElementById('admin-cust-tbody').innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--color-text-secondary);padding:24px">No customers found.</td></tr>';return;}
+  document.getElementById('admin-cust-tbody').innerHTML=list.map(c=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(c.code)}</td>
+      <td style="font-weight:500">${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.city)}</td>
+      <td>${escapeHtml(c.state)}</td>
+      <td>${escapeHtml(c.phone||'—')}</td>
+      <td style="font-size:12px;color:var(--color-text-secondary)">${escapeHtml(c.email||'—')}</td>
+      <td>
+        <button class="icon-btn" title="Edit" onclick="openCustomerModal('${escapeAttr(c.code)}')"><i class="ti ti-edit" aria-hidden="true"></i></button>
+        <button class="icon-btn danger" title="Delete" onclick="deleteCustomer('${escapeAttr(c.code)}')"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </td>
+    </tr>`).join('');
+}
+
+// ---- Helpers ----
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){return escapeHtml(str).replace(/`/g,'&#96;');}
+
+// ---- Product CRUD ----
+function openProductModal(code){
+  const isEdit=!!code;
+  document.getElementById('product-modal-title').textContent=isEdit?'Edit product':'Add product';
+  document.getElementById('product-modal-err').style.display='none';
+  document.getElementById('pm-cat-list').innerHTML=getCats().map(c=>`<option value="${escapeAttr(c)}"></option>`).join('');
+  if(isEdit){
+    const p=PRODUCTS.find(x=>x.code===code);
+    if(!p) return;
+    document.getElementById('pm-original-code').value=p.code;
+    document.getElementById('pm-code').value=p.code;
+    document.getElementById('pm-name').value=p.name;
+    document.getElementById('pm-cat').value=p.cat;
+    document.getElementById('pm-uom').value=p.uom;
+    document.getElementById('pm-mrp').value=p.mrp;
+    document.getElementById('pm-ptd').value=p.ptd;
+  } else {
+    document.getElementById('pm-original-code').value='';
+    ['pm-code','pm-name','pm-cat','pm-uom','pm-mrp','pm-ptd'].forEach(id=>document.getElementById(id).value='');
+  }
+  document.getElementById('product-modal').classList.add('active');
+}
+
+function closeProductModal(){document.getElementById('product-modal').classList.remove('active');}
+
+async function saveProductModal(){
+  const originalCode=document.getElementById('pm-original-code').value;
+  const code=document.getElementById('pm-code').value.trim();
+  const name=document.getElementById('pm-name').value.trim();
+  const cat=document.getElementById('pm-cat').value.trim();
+  const uom=document.getElementById('pm-uom').value.trim();
+  const mrp=parseFloat(document.getElementById('pm-mrp').value);
+  const ptd=parseFloat(document.getElementById('pm-ptd').value);
+  const err=document.getElementById('product-modal-err');
+  if(!code||!name||!cat||!uom||isNaN(mrp)||isNaN(ptd)||mrp<0||ptd<0){
+    err.textContent='Please fill in all fields with valid values.';err.style.display='block';return;
+  }
+  const dupe=PRODUCTS.find(p=>p.code===code&&p.code!==originalCode);
+  if(dupe){err.textContent='Another product already uses this item code.';err.style.display='block';return;}
+  err.style.display='none';
+  const record={code,name,cat,uom,mrp,ptd};
+  if(originalCode){
+    const idx=PRODUCTS.findIndex(p=>p.code===originalCode);
+    if(idx>-1) PRODUCTS[idx]=record;
+  } else {
+    PRODUCTS.push(record);
+  }
+  await saveProductsToStorage();
+  closeProductModal();
+  buildCatFilter();
+  renderAdminProducts();
+}
+
+async function deleteProduct(code){
+  const p=PRODUCTS.find(x=>x.code===code);
+  if(!p) return;
+  if(!confirm(`Delete "${p.name}" (${p.code})? This cannot be undone.`)) return;
+  PRODUCTS=PRODUCTS.filter(x=>x.code!==code);
+  await saveProductsToStorage();
+  buildCatFilter();
+  renderAdminProducts();
+}
+
+// ---- Customer CRUD ----
+function openCustomerModal(code){
+  const isEdit=!!code;
+  document.getElementById('customer-modal-title').textContent=isEdit?'Edit customer':'Add customer';
+  document.getElementById('customer-modal-err').style.display='none';
+  if(isEdit){
+    const c=CUSTOMERS.find(x=>x.code===code);
+    if(!c) return;
+    document.getElementById('cm-original-code').value=c.code;
+    document.getElementById('cm-code').value=c.code;
+    document.getElementById('cm-name').value=c.name;
+    document.getElementById('cm-city').value=c.city;
+    document.getElementById('cm-state').value=c.state;
+    document.getElementById('cm-phone').value=c.phone||'';
+    document.getElementById('cm-email').value=c.email||'';
+  } else {
+    document.getElementById('cm-original-code').value='';
+    ['cm-code','cm-name','cm-city','cm-state','cm-phone','cm-email'].forEach(id=>document.getElementById(id).value='');
+  }
+  document.getElementById('customer-modal').classList.add('active');
+}
+
+function closeCustomerModal(){document.getElementById('customer-modal').classList.remove('active');}
+
+async function saveCustomerModal(){
+  const originalCode=document.getElementById('cm-original-code').value;
+  const code=document.getElementById('cm-code').value.trim();
+  const name=document.getElementById('cm-name').value.trim();
+  const city=document.getElementById('cm-city').value.trim();
+  const state=document.getElementById('cm-state').value.trim();
+  const phone=document.getElementById('cm-phone').value.trim();
+  const email=document.getElementById('cm-email').value.trim();
+  const err=document.getElementById('customer-modal-err');
+  if(!code||!name||!city||!state){
+    err.textContent='Code, name, city, and state are required.';err.style.display='block';return;
+  }
+  const dupe=CUSTOMERS.find(c=>c.code===code&&c.code!==originalCode);
+  if(dupe){err.textContent='Another customer already uses this code.';err.style.display='block';return;}
+  err.style.display='none';
+  const record={code,name,city,state,phone,email};
+  if(originalCode){
+    const idx=CUSTOMERS.findIndex(c=>c.code===originalCode);
+    if(idx>-1) CUSTOMERS[idx]=record;
+  } else {
+    CUSTOMERS.push(record);
+  }
+  await saveCustomersToStorage();
+  closeCustomerModal();
+  renderAdminCustomers();
+  refreshLoginCustomerSelect();
+}
+
+async function deleteCustomer(code){
+  const c=CUSTOMERS.find(x=>x.code===code);
+  if(!c) return;
+  if(!confirm(`Delete "${c.name}" (${c.code})? This cannot be undone.`)) return;
+  CUSTOMERS=CUSTOMERS.filter(x=>x.code!==code);
+  await saveCustomersToStorage();
+  renderAdminCustomers();
+  refreshLoginCustomerSelect();
+}
+
+function refreshLoginCustomerSelect(){
+  const sel=document.getElementById('cust-select');
+  if(!sel) return;
+  const prevVal=sel.value;
+  sel.innerHTML=CUSTOMERS.map(c=>`<option value="${escapeAttr(c.code)}">${escapeHtml(c.name)} (${escapeHtml(c.city)})</option>`).join('');
+  if(CUSTOMERS.some(c=>c.code===prevVal)) sel.value=prevVal;
+}
+
+// ---- Excel import / export ----
+function downloadProductTemplate(){
+  const ws=XLSX.utils.json_to_sheet([{code:"30000826",name:"A-4 CREAM 1X15G",cat:"Skin Care",uom:"PCS",mrp:82.29,ptd:15.25}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Products');
+  XLSX.writeFile(wb,'product_import_template.xlsx');
+}
+
+function downloadCustomerTemplate(){
+  const ws=XLSX.utils.json_to_sheet([{code:"2002295",name:"ABHIKALP MEDICAL STORE",city:"ETAH",state:"UTTAR PRADESH",phone:"9457515637",email:"name@example.com"}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Customers');
+  XLSX.writeFile(wb,'customer_import_template.xlsx');
+}
+
+function triggerProductImport(){document.getElementById('product-import-file').click();}
+function triggerCustomerImport(){document.getElementById('customer-import-file').click();}
+
+function readWorkbook(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const sheet=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+        resolve(rows);
+      }catch(err){reject(err);}
+    };
+    reader.onerror=()=>reject(new Error('Could not read file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function normKey(row,...keys){
+  for(const k of Object.keys(row)){
+    const lk=k.trim().toLowerCase();
+    if(keys.includes(lk)) return row[k];
+  }
+  return '';
+}
+
+async function handleProductImport(evt){
+  const file=evt.target.files[0];
+  if(!file) return;
+  const resultEl=document.getElementById('product-import-result');
+  try{
+    const rows=await readWorkbook(file);
+    let added=0,updated=0,skipped=0;
+    rows.forEach(row=>{
+      const code=String(normKey(row,'code','item code','itemcode')).trim();
+      const name=String(normKey(row,'name','product name','productname')).trim();
+      const cat=String(normKey(row,'cat','category')).trim();
+      const uom=String(normKey(row,'uom')).trim();
+      const mrp=parseFloat(normKey(row,'mrp'));
+      const ptd=parseFloat(normKey(row,'ptd'));
+      if(!code||!name||isNaN(mrp)||isNaN(ptd)){skipped++;return;}
+      const idx=PRODUCTS.findIndex(p=>p.code===code);
+      const record={code,name,cat:cat||'Uncategorised',uom:uom||'PCS',mrp,ptd};
+      if(idx>-1){PRODUCTS[idx]=record;updated++;}
+      else{PRODUCTS.push(record);added++;}
+    });
+    await saveProductsToStorage();
+    buildCatFilter();
+    renderAdminProducts();
+    resultEl.textContent=`Import complete: ${added} added, ${updated} updated${skipped?`, ${skipped} skipped (missing required fields)`:''}.`;
+    resultEl.style.display='block';
+    setTimeout(()=>resultEl.style.display='none',6000);
+  }catch(err){
+    alert('Could not import this file. Please use the template format (columns: code, name, cat, uom, mrp, ptd).');
+  }
+  evt.target.value='';
+}
+
+async function handleCustomerImport(evt){
+  const file=evt.target.files[0];
+  if(!file) return;
+  const resultEl=document.getElementById('customer-import-result');
+  try{
+    const rows=await readWorkbook(file);
+    let added=0,updated=0,skipped=0;
+    rows.forEach(row=>{
+      const code=String(normKey(row,'code','customer code')).trim();
+      const name=String(normKey(row,'name')).trim();
+      const city=String(normKey(row,'city')).trim();
+      const state=String(normKey(row,'state')).trim();
+      const phone=String(normKey(row,'phone')).trim();
+      const email=String(normKey(row,'email')).trim();
+      if(!code||!name){skipped++;return;}
+      const idx=CUSTOMERS.findIndex(c=>c.code===code);
+      // Import file has no phone/email columns for most rows. Never let a
+      // blank import value overwrite contact info someone already entered
+      // via the admin edit form - only fill it in if it was empty before.
+      const existing=idx>-1?CUSTOMERS[idx]:null;
+      const record={
+        code,name,
+        city:city||(existing?existing.city:''),
+        state:state||(existing?existing.state:''),
+        phone:phone||(existing?existing.phone:''),
+        email:email||(existing?existing.email:'')
+      };
+      if(idx>-1){CUSTOMERS[idx]=record;updated++;}
+      else{CUSTOMERS.push(record);added++;}
+    });
+    await saveCustomersToStorage();
+    renderAdminCustomers();
+    refreshLoginCustomerSelect();
+    resultEl.textContent=`Import complete: ${added} added, ${updated} updated${skipped?`, ${skipped} skipped (missing code/name)`:''}.`;
+    resultEl.style.display='block';
+    setTimeout(()=>resultEl.style.display='none',6000);
+  }catch(err){
+    alert('Could not import this file. Please use the template format (columns: code, name, city, state, phone, email).');
+  }
+  evt.target.value='';
+}
+
+async function init(){
+  const signInBtn=document.getElementById('sign-in-btn');
+  const sel=document.getElementById('cust-select');
+  sel.innerHTML='<option>Loading...</option>';
+  if(signInBtn){signInBtn.disabled=true;signInBtn.textContent='Loading data...';}
+  await loadCatalogFromStorage();
+  refreshLoginCustomerSelect();
+  buildCatFilter();
+  if(signInBtn){signInBtn.disabled=false;signInBtn.innerHTML='Sign in <i class="ti ti-arrow-right" aria-hidden="true"></i>';}
+}
+init();
+</script>
