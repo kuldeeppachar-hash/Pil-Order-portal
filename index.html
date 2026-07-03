@@ -402,82 +402,82 @@
 <script>
 // ===================== DATA =====================
 const PRODUCTS=[
-{code:"24000012",name:"MYCONORM POWDER 1X75gm",cat:"Skin Care",uom:"PCS",mrp:95.85,ptd:30.0},
-{code:"24000047",name:"POVIPIL OINTMENT 1X20G",cat:"Wound Care",uom:"PCS",mrp:56.7,ptd:15.0},
-{code:"24000048",name:"POVIPIL SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:47.25,ptd:22.5},
-{code:"24000065",name:"ANTI TICK POWDER 1X100GM",cat:"Pet Care",uom:"PCS",mrp:198.5,ptd:70.0},
-{code:"24000115",name:"NASOPIL ADULT NASAL DROPS 1X10ml",cat:"ENT / Respiratory",uom:"PCS",mrp:53.75,ptd:16.0},
-{code:"24000116",name:"NASOPIL PAEDIATRIC NASAL DROPS 1X10ML",cat:"ENT / Respiratory",uom:"PCS",mrp:43.98,ptd:16.0},
-{code:"24000132",name:"ORTHODEX SPRAY 1X60GM",cat:"Ortho / Pain",uom:"PCS",mrp:165.0,ptd:57.0},
-{code:"24000152",name:"PIL'S D3 ORAL SOLUTION 4X5ML",cat:"Vitamins / Nutrition",uom:"BOX",mrp:70.0,ptd:55.0},
-{code:"24000153",name:"POVIPIL GARGLE SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:150.0,ptd:27.0},
-{code:"24000169",name:"ORTHODEX ROLL ON 1X50GM",cat:"Ortho / Pain",uom:"PCS",mrp:145.31,ptd:50.0},
-{code:"24000205",name:"PIL TEARS EYE DROPS 20X10ML (KIT)",cat:"Ophthalmic",uom:"PKT",mrp:2861.4,ptd:265.0},
-{code:"24000209",name:"NEUROVITE CAPSULE 15X1X10",cat:"Vitamins / Nutrition",uom:"BOX",mrp:1835.25,ptd:175.0},
-{code:"24000211",name:"MULTIZAC FORTE SYRUP 1X200ML",cat:"Vitamins / Nutrition",uom:"PCS",mrp:146.82,ptd:38.5},
-{code:"24000236",name:"Dr. Pil SOTHREX TULSI LOZENGES 150X1 Tab",cat:"ENT / Respiratory",uom:"BOX",mrp:225.0,ptd:100.0},
-{code:"24000238",name:"Dr. Pil  Pregnancy Test Kit (25x1 KIT)",cat:"Diagnostics",uom:"BOX",mrp:1250.0,ptd:135.0},
-{code:"30000488",name:"SNEECURE EXTRA (30X10 TABS)",cat:"ENT / Respiratory",uom:"BOX",mrp:1493.1,ptd:330.0},
-{code:"30000495",name:"MANPIL-100 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4929.4,ptd:180.0},
-{code:"30000496",name:"POWERMAN-100(30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4529.4,ptd:180.0},
-{code:"30000497",name:"MANPIL-50 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2882.1,ptd:125.0},
-{code:"30000605",name:"ACNE DERMA SOAP 1X75gm",cat:"Skin Care",uom:"PCS",mrp:91.2,ptd:25.0},
-{code:"30000608",name:"PRICKLY HEAT SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:80.75,ptd:30.0},
-{code:"30000611",name:"DANCURE SHAMPOO 1X50ml",cat:"Skin Care",uom:"PCS",mrp:109.8,ptd:35.0},
-{code:"30000616",name:"SOTHREX TULSI SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:113.24,ptd:27.5},
-{code:"30000641",name:"HEAD LICE SOAP 1X75gm",cat:"Head Lice",uom:"PCS",mrp:97.7,ptd:28.0},
-{code:"30000661",name:"ORTHODEX GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:115.29,ptd:22.0},
-{code:"30000662",name:"ORTHODEX GEL 1X15G",cat:"Ortho / Pain",uom:"PCS",mrp:72.05,ptd:16.0},
-{code:"30000664",name:"SOTHREX-PLUS SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:98.13,ptd:27.0},
-{code:"30000673",name:"ULSOR MOUTH GEL 1X10G",cat:"ENT / Respiratory",uom:"PCS",mrp:72.05,ptd:15.75},
-{code:"30000691",name:"SCABEPIL SOAP 1*75G",cat:"Skin Care",uom:"PCS",mrp:106.48,ptd:26.0},
-{code:"30000702",name:"NEEM PLUS HERBAL DENTAL GEL 1X100G",cat:"Dental",uom:"PCS",mrp:115.0,ptd:42.0},
-{code:"30000705",name:"HEAD LICE SHAMPOO 1X50ml",cat:"Head Lice",uom:"PCS",mrp:102.09,ptd:39.5},
-{code:"30000722",name:"NEEM & MINT PRICKLY HEAT SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:35.0},
-{code:"30000751",name:"LACTOPIL  SOLUTION 1X100ML",cat:"Pet Care",uom:"PCS",mrp:131.25,ptd:65.0},
-{code:"30000761",name:"LACTOPIL SOLUTION 1X200ml",cat:"Pet Care",uom:"PCS",mrp:262.5,ptd:130.0},
-{code:"30000773",name:"TICK & FLEA SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:296.0,ptd:93.5},
-{code:"30000778",name:"TICK & FLEA SHAMPOO 1X500ml",cat:"Pet Care",uom:"PCS",mrp:535.0,ptd:170.0},
-{code:"30000784",name:"TICK & FLEA SHAMPOO 1X1000ml",cat:"Pet Care",uom:"PCS",mrp:880.0,ptd:275.0},
-{code:"30000793",name:"TICK & FLEA SOAP 1X100gm",cat:"Pet Care",uom:"PCS",mrp:113.05,ptd:39.6},
-{code:"30000800",name:"ACNEDERMA FOAM FACE WASH GEL 1X150ml",cat:"Skin Care",uom:"PCS",mrp:272.25,ptd:84.0},
-{code:"30000813",name:"ORTHODEX GEL 1X50G",cat:"Ortho / Pain",uom:"PCS",mrp:150.98,ptd:35.0},
-{code:"30000823",name:"HEAD LICE SHAMPOO 1X30ml",cat:"Head Lice",uom:"PCS",mrp:72.05,ptd:34.5},
-{code:"30000826",name:"A-4 CREAM 1X15G",cat:"Skin Care",uom:"PCS",mrp:82.29,ptd:15.25},
-{code:"30001385",name:"PETGROW FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:275.0,ptd:71.5},
-{code:"30001504",name:"SMART PET FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:272.25,ptd:60.5},
-{code:"30001785",name:"DERMOPIL PET SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:292.0,ptd:88.0},
-{code:"30001841",name:"DERMACARE NIP CARE CREAM (1X30GM)",cat:"Skin Care",uom:"PCS",mrp:155.7,ptd:48.5},
-{code:"30001841",name:"DERMACARE NIPCARE CREAM",cat:"Skin Care",uom:"PCS",mrp:175.2,ptd:49.5},
-{code:"30001869",name:"CALPIL PET FEED SUPP. SYRUP 1X200ml",cat:"Pet Care",uom:"PCS",mrp:158.8,ptd:42.0},
-{code:"30001876",name:"MANPIL SUPER-20 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4941.0,ptd:170.0},
-{code:"30001886",name:"SCARNIL CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:382.5,ptd:138.0},
-{code:"30002100",name:"SEBO PLUS SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:111.0,ptd:36.0},
-{code:"30002287",name:"PIL'S HEEL & FOOT CREAM 1X30gm",cat:"Skin Care",uom:"PCS",mrp:133.2,ptd:35.0},
-{code:"30002288",name:"DERMACARE NEEM PLUS FACE WASH GEL(1X50G)",cat:"Skin Care",uom:"PCS",mrp:151.5,ptd:32.0},
-{code:"30002307",name:"NAPY SOFT CREAM  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:133.0,ptd:35.0},
-{code:"30002308",name:"PIL UV SOFT CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:283.5,ptd:65.0},
-{code:"30002423",name:"SOTHREX TULSI SYRUP 1X60ML (CARTON PACK)",cat:"ENT / Respiratory",uom:"PCS",mrp:83.04,ptd:18.0},
-{code:"30002474",name:"ACNEDERMA GENTLE FACE WASH GEL 1x60GM",cat:"Skin Care",uom:"PCS",mrp:181.5,ptd:42.5},
-{code:"30002568",name:"SENSOPIL  GEL  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:88.5,ptd:26.5},
-{code:"30002763",name:"SOTHREX BR SYRUP 1X100ML",cat:"ENT / Respiratory",uom:"PCS",mrp:87.5,ptd:26.5},
-{code:"30002804",name:"DERMACARE NEEM AND ALOEVERA SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:30.0},
-{code:"30002830",name:"DA' MANPIL (30*1*4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:5400.0,ptd:600.0},
-{code:"30002848",name:"SENSOPIL GEL 1X125GM",cat:"Skin Care",uom:"PCS",mrp:146.0,ptd:50.0},
-{code:"30002963",name:"TOPVITE-PLUS (10X1X10 CAPS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2109.3,ptd:250.0},
-{code:"30002980",name:"TOPVITE-FORTE (10X15 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2648.7,ptd:425.0},
-{code:"30003024",name:"NEEM PLUS HERBAL DENTAL GEL ( 1X50 GM )",cat:"Dental",uom:"PCS",mrp:66.5,ptd:23.0},
-{code:"30003092",name:"TEMPCON-EXTRA (10X2X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:937.6,ptd:180.0},
-{code:"30003106",name:"ORTHODEX-DS GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:121.87,ptd:24.0},
-{code:"30003133",name:"PIL UV SOFT LOTION 1X50ML",cat:"Skin Care",uom:"PCS",mrp:350.0,ptd:150.0},
-{code:"30003149",name:"TROMAMOL PLUS(22X5X10 TABS) CEL.PACK",cat:"Pain Management",uom:"BOX",mrp:5474.0,ptd:660.0},
-{code:"30003150",name:"TEMPCON-650(10X5X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:0.0,ptd:363.64},
-{code:"30003161",name:"MOUTH ULSOR TABS (20X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:1773.6,ptd:160.0},
-{code:"30003208",name:"CREMAPIL PLUS SUSPENSION 200 ML",cat:"ENT / Respiratory",uom:"PCS",mrp:102.31,ptd:32.0},
-{code:"30003210",name:"ALERGIPIL-180 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2250.0,ptd:275.0},
-{code:"30003227",name:"ALERGIPIL-M 120 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2500.0,ptd:225.0},
-{code:"30003179",name:"TEMPCON-EXTRA (2X10 TABS)",cat:"Pain Management",uom:"Free Gifts",mrp:0.0,ptd:0.0},
-{code:"30002721",name:"NEEM PLUS HERBAL DENTAL GEL 100G KIT PACK",cat:"Dental",uom:"Free Gifts",mrp:0.0,ptd:0.0}
+{code:"24000012",name:"MYCONORM POWDER 1X75gm",cat:"Skin Care",uom:"PCS",mrp:95.85,ptd:30.0,ptr:36.0,shipper:120},
+{code:"24000047",name:"POVIPIL OINTMENT 1X20G",cat:"Wound Care",uom:"PCS",mrp:56.7,ptd:15.0,ptr:18.0,shipper:120},
+{code:"24000048",name:"POVIPIL SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:47.25,ptd:22.5,ptr:27.0,shipper:400},
+{code:"24000065",name:"ANTI TICK POWDER 1X100GM",cat:"Pet Care",uom:"PCS",mrp:198.5,ptd:70.0,ptr:84.0,shipper:100},
+{code:"24000115",name:"NASOPIL ADULT NASAL DROPS 1X10ml",cat:"ENT / Respiratory",uom:"PCS",mrp:53.75,ptd:16.0,ptr:19.2,shipper:64},
+{code:"24000116",name:"NASOPIL PAEDIATRIC NASAL DROPS 1X10ML",cat:"ENT / Respiratory",uom:"PCS",mrp:43.98,ptd:16.0,ptr:19.2,shipper:240},
+{code:"24000132",name:"ORTHODEX SPRAY 1X60GM",cat:"Ortho / Pain",uom:"PCS",mrp:165.0,ptd:57.0,ptr:68.4,shipper:240},
+{code:"24000152",name:"PIL'S D3 ORAL SOLUTION 4X5ML",cat:"Vitamins / Nutrition",uom:"BOX",mrp:70.0,ptd:55.0,ptr:66.0,shipper:180},
+{code:"24000153",name:"POVIPIL GARGLE SOLUTION 1X100ML",cat:"Wound Care",uom:"PCS",mrp:150.0,ptd:27.0,ptr:32.4,shipper:75},
+{code:"24000169",name:"ORTHODEX ROLL ON 1X50GM",cat:"Ortho / Pain",uom:"PCS",mrp:145.31,ptd:50.0,ptr:60.0,shipper:100},
+{code:"24000205",name:"PIL TEARS EYE DROPS 20X10ML (KIT)",cat:"Ophthalmic",uom:"PKT",mrp:2861.4,ptd:265.0,ptr:318.0,shipper:126},
+{code:"24000209",name:"NEUROVITE CAPSULE 15X1X10",cat:"Vitamins / Nutrition",uom:"BOX",mrp:1835.25,ptd:175.0,ptr:210.0,shipper:16},
+{code:"24000211",name:"MULTIZAC FORTE SYRUP 1X200ML",cat:"Vitamins / Nutrition",uom:"PCS",mrp:146.82,ptd:38.5,ptr:46.2,shipper:40},
+{code:"24000236",name:"Dr. Pil SOTHREX TULSI LOZENGES 150X1 Tab",cat:"ENT / Respiratory",uom:"BOX",mrp:225.0,ptd:100.0,ptr:120.0,shipper:40},
+{code:"24000238",name:"Dr. Pil  Pregnancy Test Kit (25x1 KIT)",cat:"Diagnostics",uom:"BOX",mrp:1250.0,ptd:135.0,ptr:162.0,shipper:24},
+{code:"30000488",name:"SNEECURE EXTRA (30X10 TABS)",cat:"ENT / Respiratory",uom:"BOX",mrp:1493.1,ptd:330.0,ptr:396.0,shipper:50},
+{code:"30000495",name:"MANPIL-100 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4929.4,ptd:180.0,ptr:216.0,shipper:84},
+{code:"30000496",name:"POWERMAN-100(30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4529.4,ptd:180.0,ptr:216.0,shipper:36},
+{code:"30000497",name:"MANPIL-50 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2882.1,ptd:125.0,ptr:150.0,shipper:14},
+{code:"30000605",name:"ACNE DERMA SOAP 1X75gm",cat:"Skin Care",uom:"PCS",mrp:91.2,ptd:25.0,ptr:30.0,shipper:14},
+{code:"30000608",name:"PRICKLY HEAT SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:80.75,ptd:30.0,ptr:36.0,shipper:24},
+{code:"30000611",name:"DANCURE SHAMPOO 1X50ml",cat:"Skin Care",uom:"PCS",mrp:109.8,ptd:35.0,ptr:42.0,shipper:120},
+{code:"30000616",name:"SOTHREX TULSI SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:113.24,ptd:27.5,ptr:33.0,shipper:120},
+{code:"30000641",name:"HEAD LICE SOAP 1X75gm",cat:"Head Lice",uom:"PCS",mrp:97.7,ptd:28.0,ptr:33.6,shipper:90},
+{code:"30000661",name:"ORTHODEX GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:115.29,ptd:22.0,ptr:26.4,shipper:120},
+{code:"30000662",name:"ORTHODEX GEL 1X15G",cat:"Ortho / Pain",uom:"PCS",mrp:72.05,ptd:16.0,ptr:19.2,shipper:120},
+{code:"30000664",name:"SOTHREX-PLUS SYRUP 1X100ml",cat:"ENT / Respiratory",uom:"PCS",mrp:98.13,ptd:27.0,ptr:32.4,shipper:240},
+{code:"30000673",name:"ULSOR MOUTH GEL 1X10G",cat:"ENT / Respiratory",uom:"PCS",mrp:72.05,ptd:15.75,ptr:18.9,shipper:384},
+{code:"30000691",name:"SCABEPIL SOAP 1*75G",cat:"Skin Care",uom:"PCS",mrp:106.48,ptd:26.0,ptr:26.0,shipper:120},
+{code:"30000702",name:"NEEM PLUS HERBAL DENTAL GEL 1X100G",cat:"Dental",uom:"PCS",mrp:115.0,ptd:42.0,ptr:50.4,shipper:384},
+{code:"30000705",name:"HEAD LICE SHAMPOO 1X50ml",cat:"Head Lice",uom:"PCS",mrp:102.09,ptd:39.5,ptr:47.4,shipper:120},
+{code:"30000722",name:"NEEM & MINT PRICKLY HEAT SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:35.0,ptr:42.0,shipper:120},
+{code:"30000751",name:"LACTOPIL  SOLUTION 1X100ML",cat:"Pet Care",uom:"PCS",mrp:131.25,ptd:65.0,ptr:78.0,shipper:160},
+{code:"30000761",name:"LACTOPIL SOLUTION 1X200ml",cat:"Pet Care",uom:"PCS",mrp:262.5,ptd:130.0,ptr:156.0,shipper:120},
+{code:"30000773",name:"TICK & FLEA SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:296.0,ptd:93.5,ptr:112.2,shipper:120},
+{code:"30000778",name:"TICK & FLEA SHAMPOO 1X500ml",cat:"Pet Care",uom:"PCS",mrp:535.0,ptd:170.0,ptr:204.0,shipper:32},
+{code:"30000784",name:"TICK & FLEA SHAMPOO 1X1000ml",cat:"Pet Care",uom:"PCS",mrp:880.0,ptd:275.0,ptr:330.0,shipper:24},
+{code:"30000793",name:"TICK & FLEA SOAP 1X100gm",cat:"Pet Care",uom:"PCS",mrp:113.05,ptd:39.6,ptr:47.52,shipper:10},
+{code:"30000800",name:"ACNEDERMA FOAM FACE WASH GEL 1X150ml",cat:"Skin Care",uom:"PCS",mrp:272.25,ptd:84.0,ptr:100.8,shipper:120},
+{code:"30000813",name:"ORTHODEX GEL 1X50G",cat:"Ortho / Pain",uom:"PCS",mrp:150.98,ptd:35.0,ptr:42.0,shipper:24},
+{code:"30000823",name:"HEAD LICE SHAMPOO 1X30ml",cat:"Head Lice",uom:"PCS",mrp:72.05,ptd:34.5,ptr:41.4,shipper:120},
+{code:"30000826",name:"A-4 CREAM 1X15G",cat:"Skin Care",uom:"PCS",mrp:82.29,ptd:15.25,ptr:18.3,shipper:160},
+{code:"30001385",name:"PETGROW FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:275.0,ptd:71.5,ptr:85.8,shipper:384},
+{code:"30001504",name:"SMART PET FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:272.25,ptd:60.5,ptr:72.6,shipper:60},
+{code:"30001785",name:"DERMOPIL PET SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:292.0,ptd:88.0,ptr:105.6,shipper:24},
+{code:"30001841",name:"DERMACARE NIP CARE CREAM (1X30GM)",cat:"Skin Care",uom:"PCS",mrp:155.7,ptd:48.5,ptr:58.2,shipper:240},
+{code:"30001841",name:"DERMACARE NIPCARE CREAM",cat:"Skin Care",uom:"PCS",mrp:175.2,ptd:49.5,ptr:44.0,shipper:50},
+{code:"30001869",name:"CALPIL PET FEED SUPP. SYRUP 1X200ml",cat:"Pet Care",uom:"PCS",mrp:158.8,ptd:42.0,ptr:50.4,shipper:18},
+{code:"30001876",name:"MANPIL SUPER-20 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4941.0,ptd:170.0,ptr:204.0,shipper:56},
+{code:"30001886",name:"SCARNIL CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:382.5,ptd:138.0,ptr:165.6,shipper:120},
+{code:"30002100",name:"SEBO PLUS SOAP 1X75G",cat:"Skin Care",uom:"PCS",mrp:111.0,ptd:36.0,ptr:43.2,shipper:120},
+{code:"30002287",name:"PIL'S HEEL & FOOT CREAM 1X30gm",cat:"Skin Care",uom:"PCS",mrp:133.2,ptd:35.0,ptr:42.0,shipper:160},
+{code:"30002288",name:"DERMACARE NEEM PLUS FACE WASH GEL(1X50G)",cat:"Skin Care",uom:"PCS",mrp:151.5,ptd:32.0,ptr:38.4,shipper:160},
+{code:"30002307",name:"NAPY SOFT CREAM  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:133.0,ptd:35.0,ptr:42.0,shipper:56},
+{code:"30002308",name:"PIL UV SOFT CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:283.5,ptd:65.0,ptr:78.0,shipper:160},
+{code:"30002423",name:"SOTHREX TULSI SYRUP 1X60ML (CARTON PACK)",cat:"ENT / Respiratory",uom:"PCS",mrp:83.04,ptd:18.0,ptr:21.6,shipper:80},
+{code:"30002474",name:"ACNEDERMA GENTLE FACE WASH GEL 1x60GM",cat:"Skin Care",uom:"PCS",mrp:181.5,ptd:42.5,ptr:51.0,shipper:120},
+{code:"30002568",name:"SENSOPIL  GEL  ( 1X50 GM)",cat:"Skin Care",uom:"PCS",mrp:88.5,ptd:26.5,ptr:31.8,shipper:120},
+{code:"30002763",name:"SOTHREX BR SYRUP 1X100ML",cat:"ENT / Respiratory",uom:"PCS",mrp:87.5,ptd:26.5,ptr:31.8,shipper:120},
+{code:"30002804",name:"DERMACARE NEEM AND ALOEVERA SOAP 1X100G",cat:"Skin Care",uom:"PCS",mrp:87.0,ptd:30.0,ptr:36.0,shipper:24},
+{code:"30002830",name:"DA' MANPIL (30*1*4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:5400.0,ptd:600.0,ptr:0.0,shipper:100},
+{code:"30002848",name:"SENSOPIL GEL 1X125GM",cat:"Skin Care",uom:"PCS",mrp:146.0,ptd:50.0,ptr:60.0,shipper:36},
+{code:"30002963",name:"TOPVITE-PLUS (10X1X10 CAPS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2109.3,ptd:250.0,ptr:300.0,shipper:60},
+{code:"30002980",name:"TOPVITE-FORTE (10X15 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:2648.7,ptd:425.0,ptr:510.0,shipper:120},
+{code:"30003024",name:"NEEM PLUS HERBAL DENTAL GEL ( 1X50 GM )",cat:"Dental",uom:"PCS",mrp:66.5,ptd:23.0,ptr:27.6,shipper:32},
+{code:"30003092",name:"TEMPCON-EXTRA (10X2X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:937.6,ptd:180.0,ptr:216.0,shipper:240},
+{code:"30003106",name:"ORTHODEX-DS GEL 1X30G",cat:"Ortho / Pain",uom:"PCS",mrp:121.87,ptd:24.0,ptr:28.8,shipper:100},
+{code:"30003133",name:"PIL UV SOFT LOTION 1X50ML",cat:"Skin Care",uom:"PCS",mrp:350.0,ptd:150.0,ptr:180.0,shipper:16},
+{code:"30003149",name:"TROMAMOL PLUS(22X5X10 TABS) CEL.PACK",cat:"Pain Management",uom:"BOX",mrp:5474.0,ptd:660.0,ptr:792.0,shipper:24},
+{code:"30003150",name:"TEMPCON-650(10X5X10 TABS)",cat:"Pain Management",uom:"BOX",mrp:0.0,ptd:363.64,ptr:0.0,shipper:112},
+{code:"30003161",name:"MOUTH ULSOR TABS (20X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:1773.6,ptd:160.0,ptr:192.0,shipper:60},
+{code:"30003208",name:"CREMAPIL PLUS SUSPENSION 200 ML",cat:"ENT / Respiratory",uom:"PCS",mrp:102.31,ptd:32.0,ptr:38.4,shipper:68},
+{code:"30003210",name:"ALERGIPIL-180 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2250.0,ptd:275.0,ptr:330.0,shipper:70},
+{code:"30003227",name:"ALERGIPIL-M 120 TAB (10X1X10)",cat:"ENT / Respiratory",uom:"BOX",mrp:2500.0,ptd:225.0,ptr:270.0,shipper:60},
+{code:"30003179",name:"TEMPCON-EXTRA (2X10 TABS)",cat:"Pain Management",uom:"Free Gifts",mrp:0.0,ptd:0.0,ptr:0.0,shipper:0},
+{code:"30002721",name:"NEEM PLUS HERBAL DENTAL GEL 100G KIT PACK",cat:"Dental",uom:"Free Gifts",mrp:0.0,ptd:0.0,ptr:0.0,shipper:0}
 ];
 
 const CUSTOMERS=[
@@ -1054,16 +1054,31 @@ function exportSingleOrder(orderId){
     ['Area of Stockist', o.customer.city||''],
     ['State', o.customer.state||''],
     [],
-    ['Product Code','Product Name','UOM','Qty','PTD Rate (Rs)','Amount (Rs)']
+    ['Item Code','Material Description','UOM','Shipper Pack','MRP (Rs)','PTD (Rs)','PTR (Rs)','Order Qty','Amount (Rs)']
   ];
   o.items.forEach(item=>{
-    aoa.push([item.code,item.name,item.uom,item.qty,item.ptd,parseFloat(item.amount.toFixed(2))]);
+    // MRP/PTR/Shipper aren't stored on the order itself, only PTD and qty
+    // are - so these are looked up from the live catalog at export time.
+    // If a product's price changed since the order was placed, this shows
+    // today's MRP/PTR, not what was current when the order was submitted.
+    const prod=PRODUCTS.find(p=>p.code===item.code);
+    aoa.push([
+      item.code,
+      item.name,
+      item.uom,
+      prod?prod.shipper:'',
+      prod?prod.mrp:'',
+      item.ptd,
+      prod?prod.ptr:'',
+      item.qty,
+      parseFloat(item.amount.toFixed(2))
+    ]);
   });
   aoa.push([]);
-  aoa.push(['','','','','Total (PTD)',parseFloat(o.total.toFixed(2))]);
+  aoa.push(['','','','','','','','Total (PTD)',parseFloat(o.total.toFixed(2))]);
 
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:16},{wch:34},{wch:8},{wch:8},{wch:14},{wch:14}];
+  ws['!cols']=[{wch:12},{wch:32},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
 
   const thinBorder={style:'thin',color:{rgb:'B7B7B7'}};
   const fullBorder={top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder};
@@ -1076,9 +1091,10 @@ function exportSingleOrder(orderId){
     });
   }
 
-  // Product table header row: bold + highlighted + bordered
+  const numCols=9;
+  // Product table header row: bold + highlighted + bordered, single row only
   const headerRow=7;
-  for(let c=0;c<6;c++){
+  for(let c=0;c<numCols;c++){
     const ref=XLSX.utils.encode_cell({r:headerRow,c});
     if(ws[ref]) ws[ref].s={
       font:{bold:true,color:{rgb:'0F6E56'}},
@@ -1088,23 +1104,23 @@ function exportSingleOrder(orderId){
     };
   }
 
-  // Product data rows: bordered, qty/rate/amount centered
+  // Product data rows: bordered, text left-aligned, numbers centered
   const firstDataRow=headerRow+1;
   const lastDataRow=firstDataRow+o.items.length-1;
   for(let r=firstDataRow;r<=lastDataRow;r++){
-    for(let c=0;c<6;c++){
+    for(let c=0;c<numCols;c++){
       const ref=XLSX.utils.encode_cell({r,c});
       if(!ws[ref]) continue;
       ws[ref].s={
         border:fullBorder,
-        alignment:{horizontal:c>=2?'center':'left',vertical:'center'}
+        alignment:{horizontal:c<=1?'left':'center',vertical:'center'}
       };
     }
   }
 
   // Total row: bold, bordered, highlighted
   const totalRow=lastDataRow+2;
-  [4,5].forEach(c=>{
+  [7,8].forEach(c=>{
     const ref=XLSX.utils.encode_cell({r:totalRow,c});
     if(ws[ref]) ws[ref].s={
       font:{bold:true,color:{rgb:'0F6E56'}},
@@ -1116,7 +1132,6 @@ function exportSingleOrder(orderId){
 
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Order');
-  // Filename = customer name + code, special characters stripped, spaces removed
   const safeName=(o.customer.name||'').replace(/[^a-zA-Z0-9 ]/g,'').replace(/\s+/g,'');
   const safeCode=(o.customer.code||'').toString().replace(/[^a-zA-Z0-9]/g,'');
   const orderSuffix=o.id.replace('ORD-','');
