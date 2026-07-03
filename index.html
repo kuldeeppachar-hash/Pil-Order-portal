@@ -254,6 +254,7 @@
     <div style="display:flex;align-items:center;gap:10px">
       <span class="realtime-badge">Live</span>
       <span class="badge badge-admin">Administrator</span>
+      <button class="btn btn-sm" onclick="openMasterUpload()"><i class="ti ti-upload"></i> Upload master data</button>
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
   </div>
@@ -325,7 +326,7 @@
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
             <table>
-              <thead><tr><th>Code</th><th>Name</th><th>City</th><th>State</th><th>Phone</th><th>Email</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Code</th><th>Name</th><th>City</th><th>State</th><th>SO Name</th><th>Phone</th><th>Email</th><th>Actions</th></tr></thead>
               <tbody id="admin-cust-tbody"></tbody>
             </table>
           </div>
@@ -360,6 +361,24 @@
     <div class="modal-actions">
       <button class="btn btn-sm" onclick="closeEditContact()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveEditContact()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="master-upload-modal">
+  <div class="modal-box" style="width:560px">
+    <div class="modal-title">Upload master data (Party + Product Excel)</div>
+    <div style="font-size:12px;color:var(--color-text-secondary,#666);margin-bottom:10px">
+      Upload one .xlsx file containing a <strong>Party List</strong> sheet and/or a <strong>Product List</strong> sheet
+      (same layout as your master data sheet). Existing codes are updated in place; new codes are added.
+      Nothing is saved until you review the summary and click Confirm.
+    </div>
+    <input type="file" id="mu-file" accept=".xlsx,.xls" onchange="handleMasterFile(event)" />
+    <div id="mu-summary" style="margin-top:12px;font-size:13px;display:none;background:#f5f5f5;border-radius:8px;padding:10px 12px;max-height:260px;overflow:auto"></div>
+    <div class="modal-err" id="mu-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeMasterUpload()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="mu-confirm-btn" onclick="confirmMasterUpload()" disabled>Confirm &amp; save</button>
     </div>
   </div>
 </div>
@@ -927,6 +946,7 @@ function renderAdminCustomers(){
       <td style="font-weight:600">${c.name}</td>
       <td>${c.city}</td>
       <td>${c.state}</td>
+      <td style="font-size:12px;color:var(--color-text-secondary)">${c.soName||'—'}</td>
       <td>${c.phone||'—'}</td>
       <td style="font-size:12px;color:var(--color-text-secondary)">${c.email||'—'}</td>
       <td><button class="btn btn-sm" onclick="openEditContact('${c.code}')"><i class="ti ti-edit"></i> Edit</button></td>
@@ -949,6 +969,10 @@ async function loadContactOverrides(){
       if(o){
         if(o.phone) c.phone=o.phone;
         if(o.email) c.email=o.email;
+        if(o.name) c.name=o.name;
+        if(o.city) c.city=o.city;
+        if(o.state) c.state=o.state;
+        if(o.soName) c.soName=o.soName;
       }
     });
   }catch(e){
@@ -1167,6 +1191,219 @@ async function saveAddCustomer(){
     closeAddCustomer();
   }catch(e){
     errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+// ---- Master data bulk upload (Party List + Product List Excel) ----
+// Parsed rows are staged in memory (window._muStaged) and NOT written to
+// Firebase until the admin reviews the summary and clicks Confirm. This is
+// deliberate: a bad column mapping should never silently overwrite live
+// pricing/scheme data for the whole catalogue.
+let _muStaged=null;
+
+function _muNorm(s){
+  return String(s==null?'':s).trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+function _muFindCol(headerRow,aliases){
+  const normed=headerRow.map(_muNorm);
+  for(const a of aliases){
+    const idx=normed.indexOf(_muNorm(a));
+    if(idx!==-1) return idx;
+  }
+  return -1;
+}
+function _muFindHeaderRow(rows,codeAliases){
+  const normedAliases=codeAliases.map(_muNorm);
+  for(let i=0;i<Math.min(rows.length,8);i++){
+    const row=rows[i]||[];
+    const nonEmpty=row.filter(c=>c!==null&&c!==undefined&&String(c).trim()!=='').length;
+    if(nonEmpty<3) continue;
+    const normed=row.map(_muNorm);
+    if(normedAliases.some(a=>normed.includes(a))) return i;
+  }
+  return -1;
+}
+
+function openMasterUpload(){
+  _muStaged=null;
+  document.getElementById('mu-file').value='';
+  document.getElementById('mu-summary').style.display='none';
+  document.getElementById('mu-summary').innerHTML='';
+  document.getElementById('mu-err').style.display='none';
+  document.getElementById('mu-confirm-btn').disabled=true;
+  document.getElementById('master-upload-modal').classList.add('active');
+}
+function closeMasterUpload(){
+  document.getElementById('master-upload-modal').classList.remove('active');
+}
+
+function handleMasterFile(evt){
+  const file=evt.target.files[0];
+  const errEl=document.getElementById('mu-err');
+  const sumEl=document.getElementById('mu-summary');
+  errEl.style.display='none';
+  document.getElementById('mu-confirm-btn').disabled=true;
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const partySheetName=wb.SheetNames.find(n=>_muNorm(n).includes('party'));
+      const productSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('product'));
+      if(!partySheetName && !productSheetName){
+        errEl.textContent=`Could not find a "Party List" or "Product List" sheet. Sheets found: ${wb.SheetNames.join(', ')}`;
+        errEl.style.display='block';
+        return;
+      }
+
+      const staged={newProducts:[],updProducts:[],newCustomers:[],updCustomers:[],skipped:[]};
+
+      if(productSheetName){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[productSheetName],{header:1,defval:''});
+        const hIdx=_muFindHeaderRow(rows,['Item Code','SAP Code','Product Code','Code']);
+        if(hIdx===-1){
+          staged.skipped.push(`Product List: could not find a header row (looked for "Item Code").`);
+        } else {
+          const header=rows[hIdx];
+          const col={
+            code:_muFindCol(header,['Item Code','SAP Code','Product Code','Code']),
+            name:_muFindCol(header,['Product Name','Material Description','Name']),
+            cat:_muFindCol(header,['Category']),
+            uom:_muFindCol(header,['UOM']),
+            mrp:_muFindCol(header,['MRP (₹)','MRP (Rs)','MRP']),
+            ptd:_muFindCol(header,['PTD (₹)','PTD (Rs)','PTD']),
+            shipper:_muFindCol(header,['Shipper Size','Shipper Pack','Shipper']),
+            scheme:_muFindCol(header,['Scheme %','Scheme'])
+          };
+          if(col.code===-1||col.name===-1){
+            staged.skipped.push('Product List: could not find Item Code / Product Name columns.');
+          } else {
+            for(let r=hIdx+1;r<rows.length;r++){
+              const row=rows[r];
+              if(!row) continue;
+              const code=String(row[col.code]==null?'':row[col.code]).trim();
+              const name=String(row[col.name]==null?'':row[col.name]).trim();
+              if(!code||!name) continue;
+              const prod={
+                code,name,
+                cat:col.cat!==-1?String(row[col.cat]||'').trim():'',
+                uom:col.uom!==-1?String(row[col.uom]||'').trim():'',
+                mrp:col.mrp!==-1?(parseFloat(row[col.mrp])||0):0,
+                ptd:col.ptd!==-1?(parseFloat(row[col.ptd])||0):0,
+                shipper:col.shipper!==-1?(parseFloat(row[col.shipper])||0):0,
+                scheme:col.scheme!==-1?(parseFloat(row[col.scheme])||0):0
+              };
+              if(PRODUCTS.find(p=>p.code===code)) staged.updProducts.push(prod);
+              else staged.newProducts.push(prod);
+            }
+          }
+        }
+      }
+
+      if(partySheetName){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[partySheetName],{header:1,defval:''});
+        const hIdx=_muFindHeaderRow(rows,['SAP Code','Party Code','Customer Code']);
+        if(hIdx===-1){
+          staged.skipped.push('Party List: could not find a header row (looked for "SAP Code").');
+        } else {
+          const header=rows[hIdx];
+          const col={
+            code:_muFindCol(header,['SAP Code','Party Code','Customer Code']),
+            name:_muFindCol(header,['Party Name','Customer Name','Name']),
+            soName:_muFindCol(header,['SO Name','Sales Officer']),
+            hq:_muFindCol(header,['HQ','Head Qtr.','Head Quarter']),
+            town:_muFindCol(header,['Town']),
+            city:_muFindCol(header,['City']),
+            state:_muFindCol(header,['State']),
+            phone:_muFindCol(header,['Phone','Mobile','Contact']),
+            email:_muFindCol(header,['Email'])
+          };
+          if(col.code===-1||col.name===-1){
+            staged.skipped.push('Party List: could not find SAP Code / Party Name columns.');
+          } else {
+            for(let r=hIdx+1;r<rows.length;r++){
+              const row=rows[r];
+              if(!row) continue;
+              const code=String(row[col.code]==null?'':row[col.code]).trim();
+              const name=String(row[col.name]==null?'':row[col.name]).trim();
+              if(!code||!name) continue;
+              const cust={
+                code,name,
+                city:(col.town!==-1&&row[col.town])?String(row[col.town]).trim():(col.city!==-1?String(row[col.city]||'').trim():(col.hq!==-1?String(row[col.hq]||'').trim():'')),
+                state:col.state!==-1?String(row[col.state]||'').trim():'',
+                soName:col.soName!==-1?String(row[col.soName]||'').trim():'',
+                phone:col.phone!==-1?String(row[col.phone]||'').trim():'',
+                email:col.email!==-1?String(row[col.email]||'').trim():''
+              };
+              if(CUSTOMERS.find(c=>c.code===code)) staged.updCustomers.push(cust);
+              else staged.newCustomers.push(cust);
+            }
+          }
+        }
+      }
+
+      _muStaged=staged;
+      const lines=[];
+      lines.push(`<strong>Products:</strong> ${staged.newProducts.length} new, ${staged.updProducts.length} to update`);
+      lines.push(`<strong>Customers:</strong> ${staged.newCustomers.length} new, ${staged.updCustomers.length} to update`);
+      if(staged.skipped.length) lines.push(`<span style="color:#b91c1c">Issues: ${staged.skipped.join(' | ')}</span>`);
+      const totalRows=staged.newProducts.length+staged.updProducts.length+staged.newCustomers.length+staged.updCustomers.length;
+      sumEl.innerHTML=lines.join('<br>');
+      sumEl.style.display='block';
+      document.getElementById('mu-confirm-btn').disabled=totalRows===0;
+      if(totalRows===0 && !staged.skipped.length){
+        errEl.textContent='No usable rows found in the file.';
+        errEl.style.display='block';
+      }
+    }catch(err){
+      errEl.textContent='Could not read this file: '+err.message;
+      errEl.style.display='block';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmMasterUpload(){
+  if(!_muStaged) return;
+  const errEl=document.getElementById('mu-err');
+  const btn=document.getElementById('mu-confirm-btn');
+  btn.disabled=true;
+  btn.textContent='Saving...';
+  const {db,ref,set}=window._fb;
+  try{
+    for(const p of _muStaged.updProducts){
+      await set(ref(db,`productOverrides/${p.code}`),p);
+      const existing=PRODUCTS.find(x=>x.code===p.code);
+      if(existing) Object.assign(existing,p);
+    }
+    for(const p of _muStaged.newProducts){
+      await set(ref(db,`productAdditions/${p.code}`),p);
+      if(!PRODUCTS.find(x=>x.code===p.code)) PRODUCTS.push(p);
+    }
+    for(const c of _muStaged.updCustomers){
+      await set(ref(db,`customerContacts/${c.code}`),c);
+      const existing=CUSTOMERS.find(x=>x.code===c.code);
+      if(existing) Object.assign(existing,c);
+    }
+    for(const c of _muStaged.newCustomers){
+      await set(ref(db,`customerAdditions/${c.code}`),c);
+      if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
+    }
+    buildCatFilter();
+    renderAdminProducts();
+    renderAdminCustomers();
+    renderProducts();
+    const sel=document.getElementById('cust-select');
+    if(sel) sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
+    document.getElementById('prod-count-label').textContent=`(${PRODUCTS.length} products)`;
+    closeMasterUpload();
+    alert('Master data uploaded successfully.');
+  }catch(e){
+    errEl.textContent='Upload failed partway through: '+e.message+'. Re-check what saved before re-uploading.';
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false;
+    btn.textContent='Confirm & save';
   }
 }
 
@@ -1498,13 +1735,14 @@ function exportCustomers(){
     'Name': c.name,
     'City': c.city,
     'State': c.state,
+    'SO Name': c.soName||'',
     'Phone': c.phone||'',
     'Email': c.email
   }));
 
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(data);
-  ws['!cols']=[{wch:16},{wch:36},{wch:18},{wch:18},{wch:14},{wch:32}];
+  ws['!cols']=[{wch:16},{wch:36},{wch:18},{wch:18},{wch:20},{wch:14},{wch:32}];
   XLSX.utils.book_append_sheet(wb, ws, 'Customers');
   XLSX.writeFile(wb, `PIL_Customers_${dateStamp()}.xlsx`);
 }
