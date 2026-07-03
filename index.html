@@ -189,7 +189,8 @@
               <thead><tr>
                 <th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th>
                 <th style="text-align:right">MRP</th><th style="text-align:right">PTD</th>
-                <th style="text-align:center">Qty</th><th style="text-align:right">Amount (PTD)</th>
+                <th style="text-align:right">Scheme %</th>
+                <th style="text-align:center">Qty</th><th style="text-align:right">Amount</th>
               </tr></thead>
               <tbody id="prod-tbody"></tbody>
             </table>
@@ -296,7 +297,8 @@
         <div class="filter-row">
           <select id="admin-cat-filter" onchange="renderAdminProducts()"><option value="">All categories</option></select>
           <input id="admin-prod-search" placeholder="Search..." oninput="renderAdminProducts()" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans)" />
-          <div style="margin-left:auto">
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="openAddProduct()"><i class="ti ti-plus"></i> Add product</button>
             <button class="btn btn-excel btn-sm" onclick="exportProducts()">
               <i class="ti ti-file-spreadsheet"></i> Export to Excel
             </button>
@@ -305,7 +307,7 @@
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
             <table>
-              <thead><tr><th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th><th style="text-align:right">MRP</th><th style="text-align:right">PTD</th></tr></thead>
+              <thead><tr><th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th><th style="text-align:right">Shipper</th><th style="text-align:right">MRP</th><th style="text-align:right">PTD</th><th style="text-align:right">Scheme %</th><th></th></tr></thead>
               <tbody id="admin-prod-tbody"></tbody>
             </table>
           </div>
@@ -314,6 +316,7 @@
       <div id="ap-customers" style="display:none">
         <div class="page-title">Customers <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="cust-count-label"></span></div>
         <div class="filter-row" style="justify-content:flex-end;gap:8px">
+          <button class="btn btn-sm" onclick="openAddCustomer()"><i class="ti ti-plus"></i> Add customer</button>
           <button class="btn btn-sm" onclick="openPasswordManager()"><i class="ti ti-lock"></i> Manage Passwords</button>
           <button class="btn btn-excel btn-sm" onclick="exportCustomers()">
             <i class="ti ti-file-spreadsheet"></i> Export to Excel
@@ -357,6 +360,83 @@
     <div class="modal-actions">
       <button class="btn btn-sm" onclick="closeEditContact()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveEditContact()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-product-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add product</div>
+    <label>Item code</label>
+    <input id="np-code" placeholder="e.g. 24000012" />
+    <label>Material description</label>
+    <input id="np-name" placeholder="Product name" />
+    <label>Category</label>
+    <input id="np-cat" placeholder="e.g. Skin Care" />
+    <label>UOM</label>
+    <input id="np-uom" placeholder="e.g. PCS" />
+    <label>Shipper pack</label>
+    <input id="np-shipper" type="number" min="0" placeholder="0" />
+    <label>MRP (Rs)</label>
+    <input id="np-mrp" type="number" min="0" step="0.01" placeholder="0.00" />
+    <label>PTD (Rs)</label>
+    <input id="np-ptd" type="number" min="0" step="0.01" placeholder="0.00" />
+    <label>Scheme %</label>
+    <input id="np-scheme" type="number" min="0" max="100" step="0.01" placeholder="0" />
+    <div class="modal-err" id="np-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeAddProduct()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveAddProduct()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-product-modal">
+  <div class="modal-box">
+    <div class="modal-title">Edit product</div>
+    <div style="font-size:13px;color:var(--color-text-secondary,#666)" id="ep-title"></div>
+    <input type="hidden" id="ep-code" />
+    <label>Material description</label>
+    <input id="ep-name" />
+    <label>Category</label>
+    <input id="ep-cat" />
+    <label>UOM</label>
+    <input id="ep-uom" />
+    <label>Shipper pack</label>
+    <input id="ep-shipper" type="number" min="0" />
+    <label>MRP (Rs)</label>
+    <input id="ep-mrp" type="number" min="0" step="0.01" />
+    <label>PTD (Rs)</label>
+    <input id="ep-ptd" type="number" min="0" step="0.01" />
+    <label>Scheme %</label>
+    <input id="ep-scheme" type="number" min="0" max="100" step="0.01" />
+    <div class="modal-err" id="ep-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeEditProduct()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditProduct()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-customer-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add customer</div>
+    <label>Customer code</label>
+    <input id="nc-code" placeholder="e.g. 2000549" />
+    <label>Name</label>
+    <input id="nc-name" placeholder="Stockist name" />
+    <label>City</label>
+    <input id="nc-city" placeholder="City" />
+    <label>State</label>
+    <input id="nc-state" placeholder="State" />
+    <label>Phone</label>
+    <input id="nc-phone" placeholder="10-digit number" />
+    <label>Email</label>
+    <input id="nc-email" placeholder="name@example.com" />
+    <div class="modal-err" id="nc-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeAddCustomer()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveAddCustomer()">Save</button>
     </div>
   </div>
 </div>
@@ -479,6 +559,7 @@ const PRODUCTS=[
 {code:"30003179",name:"TEMPCON-EXTRA (2X10 TABS)",cat:"Pain Management",uom:"Free Gifts",mrp:0.0,ptd:0.0,ptr:0.0,shipper:0},
 {code:"30002721",name:"NEEM PLUS HERBAL DENTAL GEL 100G KIT PACK",cat:"Dental",uom:"Free Gifts",mrp:0.0,ptd:0.0,ptr:0.0,shipper:0}
 ];
+PRODUCTS.forEach(p=>{ if(p.scheme===undefined) p.scheme=0; if(p.shipper===undefined) p.shipper=0; });
 
 const CUSTOMERS=[
 {code:"2000549",name:"TULSI PHARMACEUTICALS ( MUZAFFAR NA",city:"MUZAFFAR NAGAR",state:"UTTAR PRADESH",phone:"",email:""},
@@ -684,19 +765,25 @@ function renderProducts(){
       <td>${p.uom}</td>
       <td style="text-align:right">${p.mrp.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600;color:#0F6E56">${p.ptd.toFixed(2)}</td>
+      <td style="text-align:right;color:${p.scheme?'#B45309':'var(--color-text-secondary)'}">${p.scheme?p.scheme+'%':'—'}</td>
       <td style="text-align:center"><input type="number" min="0" step="1" class="qty-input" id="qty-${p.code}" value="" placeholder="0" oninput="calcTotal()" /></td>
       <td style="text-align:right;font-weight:500" id="amt-${p.code}">—</td>
     </tr>`).join('');
   calcTotal();
 }
 
+// Scheme % is auto-applied here: amount = qty x PTD x (1 - scheme/100).
+// Scheme comes straight from the product record (editable in Admin ->
+// Product catalogue), so there is nothing for the stockist to toggle -
+// the discount just shows up in the Amount column as they type qty.
 function calcTotal(){
   let total=0,count=0;
   PRODUCTS.forEach(p=>{
     const inp=document.getElementById('qty-'+p.code);
     if(!inp) return;
     const qty=parseInt(inp.value)||0;
-    const amt=qty*p.ptd;
+    const scheme=p.scheme||0;
+    const amt=qty*p.ptd*(1-scheme/100);
     const cell=document.getElementById('amt-'+p.code);
     if(cell) cell.textContent=qty>0?'₹'+amt.toFixed(2):'—';
     if(qty>0){total+=amt;count++;}
@@ -712,7 +799,8 @@ async function submitOrder(){
     const inp=document.getElementById('qty-'+p.code);
     if(!inp) return;
     const qty=parseInt(inp.value)||0;
-    if(qty>0) items.push({code:p.code,name:p.name,qty,ptd:p.ptd,uom:p.uom,amount:qty*p.ptd});
+    const scheme=p.scheme||0;
+    if(qty>0) items.push({code:p.code,name:p.name,qty,ptd:p.ptd,uom:p.uom,scheme,mrp:p.mrp,shipper:p.shipper,amount:qty*p.ptd*(1-scheme/100)});
   });
   if(!items.length){alert('Please enter quantity for at least one product.');return;}
   const total=items.reduce((s,i)=>s+i.amount,0);
@@ -820,9 +908,13 @@ function renderAdminProducts(){
       <td style="font-weight:500">${p.name}</td>
       <td><span class="cat-tag">${p.cat}</span></td>
       <td>${p.uom}</td>
+      <td style="text-align:right">${p.shipper||0}</td>
       <td style="text-align:right">₹${p.mrp.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600;color:#0F6E56">₹${p.ptd.toFixed(2)}</td>
+      <td style="text-align:right">${p.scheme?p.scheme+'%':'—'}</td>
+      <td><button class="btn btn-sm" onclick="openEditProduct('${p.code}')"><i class="ti ti-edit"></i> Edit</button></td>
     </tr>`).join('');
+  document.getElementById('prod-count-label').textContent=`(${PRODUCTS.length} products)`;
 }
 
 function renderAdminCustomers(){
@@ -897,6 +989,182 @@ async function saveEditContact(){
     if(c){c.phone=phone;c.email=email;}
     renderAdminCustomers();
     closeEditContact();
+  }catch(e){
+    errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+// ---- Manual product edit (mrp/ptd/scheme/shipper/name/cat/uom) ----
+// Same pattern as customerContacts: PRODUCTS is hardcoded in this file, so
+// edits are saved to Firebase under productOverrides/{code} and merged on
+// top of PRODUCTS every time the app loads.
+async function loadProductOverrides(){
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'productOverrides'));
+    if(!snap.exists()) return;
+    const overrides=snap.val();
+    PRODUCTS.forEach(p=>{
+      const o=overrides[p.code];
+      if(o){
+        if(o.name!==undefined) p.name=o.name;
+        if(o.cat!==undefined) p.cat=o.cat;
+        if(o.uom!==undefined) p.uom=o.uom;
+        if(o.mrp!==undefined) p.mrp=o.mrp;
+        if(o.ptd!==undefined) p.ptd=o.ptd;
+        if(o.scheme!==undefined) p.scheme=o.scheme;
+        if(o.shipper!==undefined) p.shipper=o.shipper;
+      }
+    });
+  }catch(e){
+    console.error('Could not load saved product overrides',e);
+  }
+}
+
+// ---- Manually-added products/customers ----
+// New rows (not in the hardcoded PRODUCTS/CUSTOMERS arrays) are saved to
+// Firebase under productAdditions/{code} and customerAdditions/{code}, and
+// pushed into the in-memory arrays on load so they behave like any other
+// row (orderable, editable, exportable).
+async function loadProductAdditions(){
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'productAdditions'));
+    if(!snap.exists()) return;
+    const additions=snap.val();
+    Object.values(additions).forEach(p=>{
+      if(!PRODUCTS.find(x=>x.code===p.code)) PRODUCTS.push(p);
+    });
+  }catch(e){
+    console.error('Could not load added products',e);
+  }
+}
+
+async function loadCustomerAdditions(){
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'customerAdditions'));
+    if(!snap.exists()) return;
+    const additions=snap.val();
+    Object.values(additions).forEach(c=>{
+      if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
+    });
+  }catch(e){
+    console.error('Could not load added customers',e);
+  }
+}
+
+function openAddProduct(){
+  ['np-code','np-name','np-cat','np-uom','np-shipper','np-mrp','np-ptd','np-scheme'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('np-err').style.display='none';
+  document.getElementById('add-product-modal').classList.add('active');
+}
+function closeAddProduct(){
+  document.getElementById('add-product-modal').classList.remove('active');
+}
+async function saveAddProduct(){
+  const code=document.getElementById('np-code').value.trim();
+  const name=document.getElementById('np-name').value.trim();
+  const cat=document.getElementById('np-cat').value.trim();
+  const uom=document.getElementById('np-uom').value.trim();
+  const shipper=parseFloat(document.getElementById('np-shipper').value)||0;
+  const mrp=parseFloat(document.getElementById('np-mrp').value)||0;
+  const ptd=parseFloat(document.getElementById('np-ptd').value)||0;
+  const scheme=parseFloat(document.getElementById('np-scheme').value)||0;
+  const errEl=document.getElementById('np-err');
+  if(!code||!name||!cat||!uom){errEl.textContent='Item code, name, category and UOM are required.';errEl.style.display='block';return;}
+  if(PRODUCTS.find(p=>p.code===code)){errEl.textContent='A product with this item code already exists.';errEl.style.display='block';return;}
+  const prod={code,name,cat,uom,shipper,mrp,ptd,scheme};
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,`productAdditions/${code}`),prod);
+    PRODUCTS.push(prod);
+    buildCatFilter();
+    renderAdminProducts();
+    renderProducts();
+    closeAddProduct();
+  }catch(e){
+    errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+function openEditProduct(code){
+  const p=PRODUCTS.find(x=>x.code===code);
+  if(!p) return;
+  document.getElementById('ep-code').value=p.code;
+  document.getElementById('ep-title').textContent=`${p.name} (${p.code})`;
+  document.getElementById('ep-name').value=p.name;
+  document.getElementById('ep-cat').value=p.cat;
+  document.getElementById('ep-uom').value=p.uom;
+  document.getElementById('ep-shipper').value=p.shipper||0;
+  document.getElementById('ep-mrp').value=p.mrp;
+  document.getElementById('ep-ptd').value=p.ptd;
+  document.getElementById('ep-scheme').value=p.scheme||0;
+  document.getElementById('ep-err').style.display='none';
+  document.getElementById('edit-product-modal').classList.add('active');
+}
+function closeEditProduct(){
+  document.getElementById('edit-product-modal').classList.remove('active');
+}
+async function saveEditProduct(){
+  const code=document.getElementById('ep-code').value;
+  const name=document.getElementById('ep-name').value.trim();
+  const cat=document.getElementById('ep-cat').value.trim();
+  const uom=document.getElementById('ep-uom').value.trim();
+  const shipper=parseFloat(document.getElementById('ep-shipper').value)||0;
+  const mrp=parseFloat(document.getElementById('ep-mrp').value)||0;
+  const ptd=parseFloat(document.getElementById('ep-ptd').value)||0;
+  const scheme=parseFloat(document.getElementById('ep-scheme').value)||0;
+  const errEl=document.getElementById('ep-err');
+  if(!name||!cat||!uom){errEl.textContent='Name, category and UOM are required.';errEl.style.display='block';return;}
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,`productOverrides/${code}`),{name,cat,uom,shipper,mrp,ptd,scheme});
+    const p=PRODUCTS.find(x=>x.code===code);
+    if(p){Object.assign(p,{name,cat,uom,shipper,mrp,ptd,scheme});}
+    // also update it in productAdditions if it was a manually-added product,
+    // so a future page load doesn't reload the stale original values
+    const {get}=window._fb;
+    const addSnap=await get(ref(db,`productAdditions/${code}`));
+    if(addSnap.exists()) await set(ref(db,`productAdditions/${code}`),{code,name,cat,uom,shipper,mrp,ptd,scheme});
+    buildCatFilter();
+    renderAdminProducts();
+    renderProducts();
+    closeEditProduct();
+  }catch(e){
+    errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+function openAddCustomer(){
+  ['nc-code','nc-name','nc-city','nc-state','nc-phone','nc-email'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('nc-err').style.display='none';
+  document.getElementById('add-customer-modal').classList.add('active');
+}
+function closeAddCustomer(){
+  document.getElementById('add-customer-modal').classList.remove('active');
+}
+async function saveAddCustomer(){
+  const code=document.getElementById('nc-code').value.trim();
+  const name=document.getElementById('nc-name').value.trim();
+  const city=document.getElementById('nc-city').value.trim();
+  const state=document.getElementById('nc-state').value.trim();
+  const phone=document.getElementById('nc-phone').value.trim();
+  const email=document.getElementById('nc-email').value.trim();
+  const errEl=document.getElementById('nc-err');
+  if(!code||!name||!city||!state){errEl.textContent='Customer code, name, city and state are required.';errEl.style.display='block';return;}
+  if(CUSTOMERS.find(c=>c.code===code)){errEl.textContent='A customer with this code already exists.';errEl.style.display='block';return;}
+  if(phone && !/^\d{7,15}$/.test(phone)){errEl.textContent='Phone should be 7-15 digits.';errEl.style.display='block';return;}
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errEl.textContent='Enter a valid email address.';errEl.style.display='block';return;}
+  const cust={code,name,city,state,phone,email};
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,`customerAdditions/${code}`),cust);
+    CUSTOMERS.push(cust);
+    renderAdminCustomers();
+    const sel=document.getElementById('cust-select');
+    if(sel) sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
+    closeAddCustomer();
   }catch(e){
     errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
   }
@@ -1054,28 +1322,28 @@ function exportSingleOrder(orderId){
     ['Area of Stockist', o.customer.city||''],
     ['State', o.customer.state||''],
     [],
-    ['Item Code','Material Description','UOM','Shipper Pack','MRP (Rs)','PTD (Rs)','PTR (Rs)','Order Qty','Amount (Rs)']
+    ['Item Code','Material Description','UOM','Shipper Pack','MRP (Rs)','PTD (Rs)','Scheme %','Order Qty','Amount (Rs)']
   ];
   o.items.forEach(item=>{
-    // MRP/PTR/Shipper aren't stored on the order itself, only PTD and qty
-    // are - so these are looked up from the live catalog at export time.
-    // If a product's price changed since the order was placed, this shows
-    // today's MRP/PTR, not what was current when the order was submitted.
+    // MRP/Shipper aren't always stored on older orders placed before this
+    // field existed, so fall back to a live catalog lookup for those.
+    // Scheme/PTD are stored on the order itself (the rate in effect when
+    // the order was placed), so those always reflect what was actually billed.
     const prod=PRODUCTS.find(p=>p.code===item.code);
     aoa.push([
       item.code,
       item.name,
       item.uom,
-      prod?prod.shipper:'',
-      prod?prod.mrp:'',
+      item.shipper!==undefined?item.shipper:(prod?prod.shipper:''),
+      item.mrp!==undefined?item.mrp:(prod?prod.mrp:''),
       item.ptd,
-      prod?prod.ptr:'',
+      item.scheme||0,
       item.qty,
       parseFloat(item.amount.toFixed(2))
     ]);
   });
   aoa.push([]);
-  aoa.push(['','','','','','','','Total (PTD)',parseFloat(o.total.toFixed(2))]);
+  aoa.push(['','','','','','','','Total',parseFloat(o.total.toFixed(2))]);
 
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=[{wch:12},{wch:32},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
@@ -1167,6 +1435,7 @@ function exportOrders(){
   const lineData=[];
   orders.forEach(o=>{
     o.items.forEach(item=>{
+      const prod=PRODUCTS.find(p=>p.code===item.code);
       lineData.push({
         'Order ID': o.id,
         'Date': o.date,
@@ -1174,10 +1443,13 @@ function exportOrders(){
         'City': o.customer.city,
         'Status': o.status,
         'Item Code': item.code,
-        'Product Name': item.name,
+        'Material Description': item.name,
         'UOM': item.uom,
-        'Qty': item.qty,
-        'PTD Rate (Rs)': item.ptd,
+        'Shipper Pack': item.shipper!==undefined?item.shipper:(prod?prod.shipper:''),
+        'MRP (Rs)': item.mrp!==undefined?item.mrp:(prod?prod.mrp:''),
+        'PTD (Rs)': item.ptd,
+        'Scheme %': item.scheme||0,
+        'Order Qty': item.qty,
         'Amount (Rs)': parseFloat(item.amount.toFixed(2))
       });
     });
@@ -1189,7 +1461,7 @@ function exportOrders(){
 
   // Column widths
   ws1['!cols']=[{wch:20},{wch:12},{wch:10},{wch:14},{wch:28},{wch:16},{wch:18},{wch:14},{wch:12},{wch:16},{wch:12}];
-  ws2['!cols']=[{wch:20},{wch:12},{wch:28},{wch:16},{wch:12},{wch:14},{wch:34},{wch:8},{wch:8},{wch:14},{wch:14}];
+  ws2['!cols']=[{wch:20},{wch:12},{wch:28},{wch:16},{wch:12},{wch:14},{wch:34},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
 
   XLSX.utils.book_append_sheet(wb, ws1, 'Order Summary');
   XLSX.utils.book_append_sheet(wb, ws2, 'Order Line Items');
@@ -1203,16 +1475,18 @@ function exportProducts(){
 
   const data=prods.map(p=>({
     'Item Code': p.code,
-    'Product Name': p.name,
+    'Material Description': p.name,
     'Category': p.cat,
     'UOM': p.uom,
+    'Shipper Pack': p.shipper||0,
     'MRP (Rs)': p.mrp,
-    'PTD (Rs)': p.ptd
+    'PTD (Rs)': p.ptd,
+    'Scheme %': p.scheme||0
   }));
 
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(data);
-  ws['!cols']=[{wch:14},{wch:42},{wch:20},{wch:8},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:14},{wch:42},{wch:20},{wch:8},{wch:12},{wch:12},{wch:12},{wch:10}];
   XLSX.utils.book_append_sheet(wb, ws, 'Product Catalogue');
   XLSX.writeFile(wb, `PIL_Products_${dateStamp()}.xlsx`);
 }
@@ -1255,14 +1529,18 @@ function exportMyOrders(){
   const lineData=[];
   myOrders.forEach(o=>{
     o.items.forEach(item=>{
+      const prod=PRODUCTS.find(p=>p.code===item.code);
       lineData.push({
         'Order ID': o.id,
         'Date': o.date,
         'Item Code': item.code,
-        'Product Name': item.name,
+        'Material Description': item.name,
         'UOM': item.uom,
-        'Qty': item.qty,
-        'PTD Rate (Rs)': item.ptd,
+        'Shipper Pack': item.shipper!==undefined?item.shipper:(prod?prod.shipper:''),
+        'MRP (Rs)': item.mrp!==undefined?item.mrp:(prod?prod.mrp:''),
+        'PTD (Rs)': item.ptd,
+        'Scheme %': item.scheme||0,
+        'Order Qty': item.qty,
         'Amount (Rs)': parseFloat(item.amount.toFixed(2))
       });
     });
@@ -1272,7 +1550,7 @@ function exportMyOrders(){
   const ws1=XLSX.utils.json_to_sheet(summaryData);
   const ws2=XLSX.utils.json_to_sheet(lineData);
   ws1['!cols']=[{wch:20},{wch:12},{wch:10},{wch:12},{wch:16},{wch:12}];
-  ws2['!cols']=[{wch:20},{wch:12},{wch:14},{wch:38},{wch:8},{wch:8},{wch:14},{wch:14}];
+  ws2['!cols']=[{wch:20},{wch:12},{wch:14},{wch:34},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws1, 'My Orders');
   XLSX.utils.book_append_sheet(wb, ws2, 'Order Details');
   XLSX.writeFile(wb, `PIL_MyOrders_${currentCustomer.code}_${dateStamp()}.xlsx`);
@@ -1287,9 +1565,18 @@ function exportMyOrders(){
 
   window.addEventListener('firebase-ready',()=>{
     console.log('Firebase ready!');
-    loadContactOverrides().then(()=>{
+    Promise.all([
+      loadContactOverrides(),
+      loadCustomerAdditions(),
+      loadProductOverrides(),
+      loadProductAdditions()
+    ]).then(()=>{
+      buildCatFilter();
       renderAdminCustomers();
+      renderAdminProducts();
+      renderProducts();
       sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
+      document.getElementById('prod-count-label').textContent=`(${PRODUCTS.length} products)`;
     });
   });
 })();
