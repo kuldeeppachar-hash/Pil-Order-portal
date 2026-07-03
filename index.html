@@ -282,8 +282,8 @@
         <div class="card" style="padding:0;overflow:hidden">
           <div style="overflow-x:auto">
             <table>
-              <thead><tr><th>Order ID</th><th>Date &amp; Time</th><th>Customer</th><th>City</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th><th>Update</th></tr></thead>
-              <tbody id="admin-order-tbody"><tr><td colspan="8" class="loading-overlay"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Loading orders...</td></tr></tbody>
+              <thead><tr><th>Order ID</th><th>Date &amp; Time</th><th>Customer</th><th>City</th><th>Items</th><th style="text-align:right">Total (PTD)</th><th>Status</th><th>Update</th><th>Export</th></tr></thead>
+              <tbody id="admin-order-tbody"><tr><td colspan="9" class="loading-overlay"><i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Loading orders...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -730,7 +730,7 @@ function renderAdminOrders(){
 
   const tbody=document.getElementById('admin-order-tbody');
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--color-text-secondary);padding:32px">No orders yet.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--color-text-secondary);padding:32px">No orders yet.</td></tr>';
     return;
   }
   tbody.innerHTML=filtered.map(o=>`
@@ -751,6 +751,7 @@ function renderAdminOrders(){
           <option ${o.status==='Confirmed'?'selected':''}>Confirmed</option>
         </select>
       </td>
+      <td><button class="btn btn-sm" onclick="exportSingleOrder('${o.id}')" title="Export this order"><i class="ti ti-file-spreadsheet"></i></button></td>
     </tr>`).join('');
 }
 
@@ -909,6 +910,58 @@ function applyHeaderStyle(ws, numCols){
       border:{bottom:{style:"thin",color:{rgb:"A7F3D0"}}}
     };
   }
+}
+
+// Admin: Export ONE order to its own formatted .xlsx
+function exportSingleOrder(orderId){
+  const o=allOrders[orderId];
+  if(!o){alert('Order not found.');return;}
+
+  const aoa=[
+    ['Party / Customer Name', o.customer.name],
+    ['Party Code', o.customer.code],
+    ['Order Date', o.date+(o.time?' '+o.time:'')],
+    ['OTC Division', 'OTC Division'],
+    ['Area of Stockist', o.customer.city||''],
+    ['State', o.customer.state||''],
+    [],
+    ['Product Code','Product Name','UOM','Qty','PTD Rate (Rs)','Amount (Rs)']
+  ];
+  o.items.forEach(item=>{
+    aoa.push([item.code,item.name,item.uom,item.qty,item.ptd,parseFloat(item.amount.toFixed(2))]);
+  });
+  aoa.push([]);
+  aoa.push(['','','','','Total (PTD)',parseFloat(o.total.toFixed(2))]);
+
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:34},{wch:8},{wch:8},{wch:14},{wch:14}];
+
+  // Bold the 6 header-info labels (col A, rows 1-6)
+  for(let r=0;r<6;r++){
+    const ref=XLSX.utils.encode_cell({r,c:0});
+    if(ws[ref]) ws[ref].s={font:{bold:true}};
+  }
+  // Style the product table header row (row index 7 = 8th row)
+  const headerRow=7;
+  for(let c=0;c<6;c++){
+    const ref=XLSX.utils.encode_cell({r:headerRow,c});
+    if(ws[ref]) ws[ref].s={
+      font:{bold:true,color:{rgb:"0F6E56"}},
+      fill:{fgColor:{rgb:"E1F5EE"}},
+      border:{bottom:{style:"thin",color:{rgb:"A7F3D0"}}}
+    };
+  }
+  // Bold the total row
+  const totalRow=headerRow+1+o.items.length+1;
+  const totalLabelRef=XLSX.utils.encode_cell({r:totalRow,c:4});
+  const totalValRef=XLSX.utils.encode_cell({r:totalRow,c:5});
+  if(ws[totalLabelRef]) ws[totalLabelRef].s={font:{bold:true}};
+  if(ws[totalValRef]) ws[totalValRef].s={font:{bold:true,color:{rgb:"0F6E56"}}};
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Order');
+  const safeCode=(o.customer.code||'').toString().replace(/[^a-zA-Z0-9]/g,'');
+  XLSX.writeFile(wb, `PIL_Order_${safeCode}_${o.id.replace('ORD-','')}.xlsx`);
 }
 
 // Admin: Export all orders (respects current filters)
