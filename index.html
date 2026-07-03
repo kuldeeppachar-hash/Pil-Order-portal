@@ -15,6 +15,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDlpaT_qSsB7AQ-cGYVwGRMMU8TMEfUmN0",
@@ -29,12 +30,14 @@
 
   const app = initializeApp(firebaseConfig);
   const db  = getDatabase(app);
+  const auth = getAuth(app);
 
   // Admin password (change this to something secret!)
   const ADMIN_PASSWORD = "pil@admin2025";
 
   // ---- expose to global scope ----
   window._fb = { db, ref, set, get, onValue, update };
+  window._fbAuth = { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut };
   window.ADMIN_PASSWORD = ADMIN_PASSWORD;
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
@@ -310,7 +313,8 @@
       </div>
       <div id="ap-customers" style="display:none">
         <div class="page-title">Customers <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="cust-count-label"></span></div>
-        <div class="filter-row" style="justify-content:flex-end">
+        <div class="filter-row" style="justify-content:flex-end;gap:8px">
+          <button class="btn btn-sm" onclick="openPasswordManager()"><i class="ti ti-lock"></i> Manage Passwords</button>
           <button class="btn btn-excel btn-sm" onclick="exportCustomers()">
             <i class="ti ti-file-spreadsheet"></i> Export to Excel
           </button>
@@ -353,6 +357,44 @@
     <div class="modal-actions">
       <button class="btn btn-sm" onclick="closeEditContact()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveEditContact()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pwmgr-modal">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-title">Manage customer passwords</div>
+
+    <div id="pwmgr-signin">
+      <div style="font-size:12px;color:var(--color-text-secondary,#666);margin-bottom:10px">
+        This is a separate, owner-only lock. Your admin login does not grant access here.
+      </div>
+      <label>Owner email</label>
+      <input id="pwmgr-email" placeholder="you@example.com" />
+      <label>Owner password</label>
+      <input id="pwmgr-pw" type="password" placeholder="Firebase account password" />
+      <div class="modal-err" id="pwmgr-signin-err"></div>
+      <div class="modal-actions">
+        <button class="btn btn-sm" onclick="closePasswordManager()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="pwmgrSignIn()">Sign in</button>
+      </div>
+    </div>
+
+    <div id="pwmgr-list" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--color-text-secondary,#666)">Signed in as <strong id="pwmgr-owner-email"></strong></span>
+        <button class="btn btn-sm" onclick="pwmgrSignOut()">Sign out</button>
+      </div>
+      <div class="modal-err" id="pwmgr-list-err"></div>
+      <div style="max-height:340px;overflow:auto;border:0.5px solid var(--color-border-secondary,#ccc);border-radius:8px">
+        <table style="width:100%;font-size:12px">
+          <thead><tr style="background:#f5f5f5"><th style="padding:6px 8px;text-align:left">Code</th><th style="padding:6px 8px;text-align:left">Name</th><th style="padding:6px 8px;text-align:left">Current password</th><th style="padding:6px 8px"></th></tr></thead>
+          <tbody id="pwmgr-tbody"></tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-sm" onclick="closePasswordManager()">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -857,6 +899,93 @@ async function saveEditContact(){
     closeEditContact();
   }catch(e){
     errEl.textContent='Could not save. Check your connection and try again.';errEl.style.display='block';
+  }
+}
+
+// ---- Owner-only password manager ----
+// Separate from the shared ADMIN_PASSWORD gate. Requires a real Firebase
+// Auth sign-in; the database rules (set server-side, not in this file)
+// only grant read/write on customerPasswords to your specific UID, so
+// this button being visible does not by itself grant access - the rules
+// are the actual enforcement.
+function openPasswordManager(){
+  document.getElementById('pwmgr-modal').classList.add('active');
+  document.getElementById('pwmgr-signin-err').style.display='none';
+  document.getElementById('pwmgr-list-err').style.display='none';
+  const {auth}=window._fbAuth;
+  if(auth.currentUser){
+    showPasswordList();
+  }else{
+    document.getElementById('pwmgr-signin').style.display='block';
+    document.getElementById('pwmgr-list').style.display='none';
+  }
+}
+
+function closePasswordManager(){
+  document.getElementById('pwmgr-modal').classList.remove('active');
+}
+
+async function pwmgrSignIn(){
+  const email=document.getElementById('pwmgr-email').value.trim();
+  const pw=document.getElementById('pwmgr-pw').value;
+  const errEl=document.getElementById('pwmgr-signin-err');
+  errEl.style.display='none';
+  if(!email||!pw){errEl.textContent='Enter email and password.';errEl.style.display='block';return;}
+  const {auth,signInWithEmailAndPassword}=window._fbAuth;
+  try{
+    await signInWithEmailAndPassword(auth,email,pw);
+    document.getElementById('pwmgr-pw').value='';
+    await showPasswordList();
+  }catch(e){
+    errEl.textContent='Sign-in failed: '+e.message;
+    errEl.style.display='block';
+  }
+}
+
+async function pwmgrSignOut(){
+  const {auth,signOut}=window._fbAuth;
+  await signOut(auth);
+  document.getElementById('pwmgr-signin').style.display='block';
+  document.getElementById('pwmgr-list').style.display='none';
+  document.getElementById('pwmgr-email').value='';
+}
+
+async function showPasswordList(){
+  const {auth}=window._fbAuth;
+  document.getElementById('pwmgr-owner-email').textContent=auth.currentUser.email;
+  document.getElementById('pwmgr-signin').style.display='none';
+  document.getElementById('pwmgr-list').style.display='block';
+  const listErr=document.getElementById('pwmgr-list-err');
+  listErr.style.display='none';
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'customerPasswords'));
+    const stored=snap.exists()?snap.val():{};
+    document.getElementById('pwmgr-tbody').innerHTML=CUSTOMERS.map(c=>{
+      const pw=stored[c.code]||DEFAULT_CUSTOMER_PASSWORD+' (default, unchanged)';
+      return `<tr>
+        <td style="padding:6px 8px;font-family:var(--font-mono);font-size:11px">${c.code}</td>
+        <td style="padding:6px 8px">${c.name}</td>
+        <td style="padding:6px 8px">${pw}</td>
+        <td style="padding:6px 8px"><button class="btn btn-sm" onclick="pwmgrReset('${c.code}')">Reset to default</button></td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    // Most likely cause: rules aren't restricted to your UID yet, or
+    // you're signed in as the wrong account.
+    listErr.textContent='Could not load passwords: '+e.message+'. Check that the database rules grant your account access.';
+    listErr.style.display='block';
+  }
+}
+
+async function pwmgrReset(code){
+  if(!confirm('Reset this customer\'s password back to the default ('+DEFAULT_CUSTOMER_PASSWORD+')?')) return;
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,`customerPasswords/${code}`),DEFAULT_CUSTOMER_PASSWORD);
+    await showPasswordList();
+  }catch(e){
+    alert('Could not reset password: '+e.message);
   }
 }
 
