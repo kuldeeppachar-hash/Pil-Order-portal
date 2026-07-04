@@ -1508,12 +1508,12 @@ function handleMasterFile(evt){
 
       if(stockSheetName){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[stockSheetName],{header:1,defval:''});
-        const hIdx=_muFindHeaderRow(rows,['Material Code','Item Code','Product Code']);
+        const hIdx=_muFindHeaderRow(rows,['Material Code','Material','Item Code','Product Code']);
         if(hIdx===-1){
           staged.skipped.push('Stock sheet: could not find a header row (looked for "Material Code").');
         } else {
           const header=rows[hIdx];
-          const codeCol=_muFindCol(header,['Material Code','Item Code','Product Code','Code']);
+          const codeCol=_muFindCol(header,['Material Code','Material','Item Code','Product Code','Code']);
           // Any column whose header contains a C0xx-style code (e.g. "Meerut C002")
           // is treated as a depot stock column. This is deliberately dynamic so a
           // new C&F depot added later needs no code change here - just a new
