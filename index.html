@@ -104,6 +104,11 @@
   tr:hover td { background: #f9fafb; }
   .qty-input { width: 68px; padding: 4px 6px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md); text-align: center; font-size: 13px; font-family: var(--font-sans); background: var(--color-background-primary); color: var(--color-text-primary); }
   .qty-input:focus { outline: none; border-color: #1D9E75; }
+  .qty-input.stock-in { background: rgba(34,197,94,0.14); border-color: #22C55E; }
+  .qty-input.stock-in:focus { border-color: #16A34A; }
+  .qty-input.stock-out { background: rgba(239,68,68,0.14); border-color: #EF4444; }
+  .qty-input.stock-out:focus { border-color: #DC2626; }
+  .qty-input.stock-unknown { background: rgba(148,163,184,0.14); border-color: var(--color-border-secondary); }
   .cat-tag { font-size: 11px; padding: 2px 8px; border-radius: 12px; background: var(--color-background-secondary); color: var(--color-text-secondary); border: 1px solid var(--color-border-secondary); }
   .total-bar { position: sticky; bottom: 0; background: var(--color-background-primary); border-top: 1px solid var(--color-border-secondary); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; z-index: 10; }
   .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -663,6 +668,17 @@ const CUSTOMERS=[
 {code:"2002520",name:"S.K PHARMA",city:"JAIPUR",state:"RAJASTHAN",phone:"",email:""}
 ];
 
+// ===================== C&F STOCK AVAILABILITY =====================
+// CUSTOMER_CF maps each stockist's SAP/party code -> their C&F (CFA) code,
+// sourced from the "C & F" column of the Party List master sheet.
+// STOCK_BY_CF maps each product code -> {cfCode: qty}, sourced from the
+// CFA Stock report. Both are static snapshots baked in at build time -
+// re-generate and re-paste these two blocks whenever a fresh stock file
+// or updated Party List is available (ask Claude to redo the same steps).
+const CUSTOMER_CF={"2000549":"C002","2002243":"C008","2002245":"C002","2002246":"C006","2002257":"C006","2002258":"C002","2002274":"C006","2002276":"C006","2002280":"C006","2002281":"C006","2002284":"C006","2002306":"C008","2002307":"C008","2002309":"C002","2002314":"C008","2002318":"C002","2002327":"C008","2002334":"C002","2002335":"C002","2002336":"C008","2002337":"C008","2002338":"C008","2002339":"C008","2002340":"C008","2002344":"C002","2002347":"C008","2002348":"C008","2002349":"C006","2002356":"C002","2002357":"C006","2002365":"C002","2002366":"C002","2002367":"C006","2002368":"C008","2002380":"C008","2002381":"C006","2002382":"C008","2002385":"C008","2002386":"C006","2002404":"C008","2002405":"C006","2002415":"C006","2002416":"C008","2002420":"C008","2002441":"C006","2002450":"C008","2002475":"C008","2002476":"C008","2002479":"C006","2002486":"C008","2002487":"C003","2002491":"C003","2002492":"C003","2002493":"C003","2002497":"C003","2002498":"C008","2002509":"C002","2002511":"C008","2002515":"C003","2002517":"C003","2002520":"C006","2002513":"C001","2002512":"C006","2002525":"C008"};
+const STOCK_BY_CF={"24000012":{"C002":0,"C003":1830,"C006":85,"C008":324,"C012":35},"24000047":{"C002":2746,"C003":5740,"C006":2285,"C008":1813,"C012":1200},"24000048":{"C002":615,"C003":7170,"C006":3447,"C008":1624,"C012":850},"24000065":{"C002":84,"C003":1348,"C006":0,"C008":95,"C012":5},"24000115":{"C002":1770,"C003":25370,"C006":26810,"C008":22366,"C012":2850},"24000116":{"C002":0,"C003":12220,"C006":14215,"C008":3968,"C012":3540},"24000132":{"C002":0,"C003":0,"C006":228,"C008":0,"C012":0},"24000152":{"C002":1231,"C003":0,"C006":48,"C008":3029,"C012":1151},"24000153":{"C002":0,"C003":784,"C006":51,"C008":11,"C012":0},"24000169":{"C002":145,"C003":1609,"C006":412,"C008":162,"C012":79},"24000205":{"C002":0,"C003":87,"C006":17,"C008":72,"C012":22},"24000209":{"C002":0,"C003":34,"C006":22,"C008":99,"C012":27},"24000211":{"C002":0,"C003":0,"C006":39,"C008":0,"C012":0},"24000236":{"C002":64,"C003":104,"C006":868,"C008":192,"C012":148},"24000238":{"C002":0,"C003":66,"C006":8,"C008":0,"C012":1},"30000488":{"C002":175,"C003":1059,"C006":515,"C008":133,"C012":138},"30000495":{"C002":0,"C003":270,"C006":59,"C008":78,"C012":9},"30000496":{"C002":26,"C003":328,"C006":40,"C008":143,"C012":4},"30000497":{"C002":8,"C003":103,"C006":85,"C008":0,"C012":23},"30000605":{"C002":0,"C003":2360,"C006":1458,"C008":1250,"C012":1260},"30000608":{"C002":212,"C003":4470,"C006":0,"C008":0,"C012":60},"30000611":{"C002":102,"C003":2100,"C006":117,"C008":563,"C012":180},"30000616":{"C002":13768,"C003":40420,"C006":23664,"C008":30068,"C012":9828},"30000641":{"C002":387,"C003":5610,"C006":3248,"C008":990,"C012":1540},"30000661":{"C002":0,"C003":30372,"C006":12080,"C008":3284,"C012":3818},"30000662":{"C002":460,"C003":26582,"C006":4448,"C008":10840,"C012":420},"30000664":{"C002":1306,"C003":13752,"C006":12268,"C008":6874,"C012":2510},"30000673":{"C002":289,"C003":2578,"C006":1207,"C008":0,"C012":36},"30000691":{"C002":427,"C003":6140,"C006":4215,"C008":2802,"C012":1480},"30000702":{"C002":570,"C003":7610,"C006":2978,"C008":2117,"C012":2154},"30000705":{"C002":632,"C003":3285,"C006":543,"C008":479,"C012":1250},"30000722":{"C002":0,"C003":0,"C006":40,"C008":765,"C012":0},"30000751":{"C002":0,"C003":82,"C006":0,"C008":710,"C012":0},"30000761":{"C002":0,"C003":115,"C006":1202,"C008":1153,"C012":18},"30000773":{"C002":1517,"C003":7966,"C006":0,"C008":177,"C012":24},"30000778":{"C002":56,"C003":360,"C006":0,"C008":34,"C012":10},"30000793":{"C002":920,"C003":1520,"C006":0,"C008":0,"C012":400},"30000800":{"C002":259,"C003":946,"C006":243,"C008":868,"C012":43},"30000813":{"C002":489,"C003":4614,"C006":3926,"C008":3419,"C012":1826},"30000823":{"C002":580,"C003":550,"C006":570,"C008":2,"C012":1520},"30000826":{"C002":374,"C003":2352,"C006":735,"C008":0,"C012":300},"30001504":{"C002":480,"C003":406,"C006":0,"C008":483,"C012":0},"30001785":{"C002":229,"C003":24,"C006":0,"C008":116,"C012":0},"30001841":{"C002":128,"C003":0,"C006":0,"C008":0,"C012":132},"30001869":{"C002":32,"C003":0,"C006":0,"C008":58,"C012":15},"30001876":{"C002":0,"C003":302,"C006":8,"C008":9,"C012":12},"30001886":{"C002":0,"C003":0,"C006":0,"C008":0,"C012":23},"30002100":{"C002":616,"C003":680,"C006":174,"C008":170,"C012":320},"30002287":{"C002":0,"C003":0,"C006":0,"C008":0,"C012":174},"30002288":{"C002":248,"C003":0,"C006":332,"C008":324,"C012":240},"30002307":{"C002":286,"C003":762,"C006":732,"C008":499,"C012":338},"30002308":{"C002":0,"C003":2962,"C006":49,"C008":417,"C012":102},"30002423":{"C002":136,"C003":2590,"C006":6430,"C008":208,"C012":3370},"30002474":{"C002":0,"C003":1538,"C006":0,"C008":0,"C012":331},"30002568":{"C002":273,"C003":750,"C006":3230,"C008":2379,"C012":861},"30002721":{"C002":4,"C003":94,"C006":139,"C008":154,"C012":33},"30002763":{"C002":2118,"C003":9636,"C006":15856,"C008":3586,"C012":3882},"30002804":{"C002":310,"C003":5840,"C006":4267,"C008":2902,"C012":1450},"30002848":{"C002":0,"C003":49720,"C006":1393,"C008":10060,"C012":440},"30002963":{"C002":57,"C003":151,"C006":7,"C008":46,"C012":35},"30002980":{"C002":6,"C003":116,"C006":304,"C008":32,"C012":60},"30003024":{"C002":330,"C003":365,"C006":1322,"C008":1250,"C012":0},"30003092":{"C002":0,"C003":255,"C006":313,"C008":334,"C012":42},"30003106":{"C002":2466,"C003":8052,"C006":3082,"C008":2324,"C012":8220},"30003133":{"C002":119,"C003":85,"C006":872,"C008":356,"C012":734},"30003149":{"C002":154,"C003":493,"C006":1031,"C008":505,"C012":159},"30003150":{"C002":208,"C003":326,"C006":377,"C008":448,"C012":148},"30003161":{"C002":293,"C003":122,"C006":0,"C008":0,"C012":105},"30003179":{"C002":222,"C003":836,"C006":1247,"C008":1302,"C012":145},"30003208":{"C002":2078,"C003":37190,"C006":8810,"C008":4190,"C012":40}};
+
+
 // ===================== STATE =====================
 let currentRole=null, currentCustomer=null, loginRole='customer';
 let fbListener=null;
@@ -734,6 +750,7 @@ async function doLogin(){
       err.textContent='Login error: '+e.message;err.style.display='block';return;
     }
     currentCustomer=candidate;
+    currentCustomer.cf=CUSTOMER_CF[currentCustomer.code]||null;
     currentRole='customer';
     document.getElementById('cust-name-badge').textContent=currentCustomer.name;
     showScreen('s-customer');
@@ -793,6 +810,28 @@ function getFilteredProducts(catId,searchId){
   return PRODUCTS.filter(p=>(!cat||p.cat===cat)&&(!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q)));
 }
 
+// Returns 'in' | 'out' | 'unknown' for a product code against the
+// logged-in stockist's C&F. 'unknown' covers two real cases we should
+// not silently paint red: (1) this stockist's C&F code isn't in the
+// stock file at all (e.g. C001 - no CFA stock sheet for that code), or
+// (2) this product has no row in the stock file yet. Both need a human
+// to check, not a false "out of stock".
+function getStockStatus(code){
+  if(!currentCustomer||!currentCustomer.cf) return 'unknown';
+  const row=STOCK_BY_CF[code];
+  if(!row) return 'unknown';
+  const qty=row[currentCustomer.cf];
+  if(qty===undefined) return 'unknown';
+  return qty>0?'in':'out';
+}
+
+function applyStockStyle(inputEl,status){
+  if(!inputEl) return;
+  inputEl.classList.remove('stock-in','stock-out','stock-unknown');
+  inputEl.classList.add('stock-'+status);
+  inputEl.title=status==='in'?'In stock at your C&F':status==='out'?'Out of stock at your C&F':'Stock data not available';
+}
+
 function renderProducts(){
   const prods=getFilteredProducts('cat-filter','prod-search');
   document.getElementById('prod-tbody').innerHTML=prods.map(p=>`
@@ -804,7 +843,7 @@ function renderProducts(){
       <td style="text-align:right">${p.mrp.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600;color:#0F6E56">${p.ptd.toFixed(2)}</td>
       <td style="text-align:right;color:${p.scheme?'#B45309':'var(--color-text-secondary)'}">${p.scheme?p.scheme+'%':'—'}</td>
-      <td style="text-align:center"><input type="number" min="0" step="1" class="qty-input" id="qty-${p.code}" value="" placeholder="0" oninput="calcTotal()" /></td>
+      <td style="text-align:center"><input type="number" min="0" step="1" class="qty-input" id="qty-${p.code}" data-code="${p.code}" value="" placeholder="0" oninput="calcTotal()" /></td>
       <td style="text-align:right;font-weight:500" id="amt-${p.code}">—</td>
     </tr>`).join('');
   calcTotal();
@@ -819,6 +858,7 @@ function calcTotal(){
   PRODUCTS.forEach(p=>{
     const inp=document.getElementById('qty-'+p.code);
     if(!inp) return;
+    applyStockStyle(inp,getStockStatus(p.code));
     const qty=parseInt(inp.value)||0;
     const scheme=p.scheme||0;
     const amt=qty*p.ptd*(1-scheme/100);
