@@ -14,7 +14,7 @@
      ====================================================== -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getDatabase, ref, set, get, onValue, update, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -36,7 +36,7 @@
   const ADMIN_PASSWORD = "pil@admin2025";
 
   // ---- expose to global scope ----
-  window._fb = { db, ref, set, get, onValue, update };
+  window._fb = { db, ref, set, get, onValue, update, runTransaction };
   window._fbAuth = { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut };
   window.ADMIN_PASSWORD = ADMIN_PASSWORD;
   window.dispatchEvent(new Event("firebase-ready"));
@@ -168,6 +168,7 @@
     <span class="logo">PIL <span>Order Portal</span></span>
     <div style="display:flex;align-items:center;gap:10px">
       <span class="realtime-badge">Live</span>
+      <span id="stock-freshness-note" style="font-size:11px;color:var(--color-text-secondary)"></span>
       <span class="badge badge-cust" id="cust-name-badge"></span>
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
@@ -391,10 +392,11 @@
 
 <div class="modal-overlay" id="master-upload-modal">
   <div class="modal-box" style="width:560px">
-    <div class="modal-title">Upload master data (Party + Product Excel)</div>
+    <div class="modal-title">Upload master data (Party + Product + Stock Excel)</div>
     <div style="font-size:12px;color:var(--color-text-secondary,#666);margin-bottom:10px">
-      Upload one .xlsx file containing a <strong>Party List</strong> sheet and/or a <strong>Product List</strong> sheet
-      (same layout as your master data sheet). Existing codes are updated in place; new codes are added.
+      Upload one .xlsx file. It can contain a <strong>Party List</strong> sheet, a <strong>Product List</strong> sheet,
+      and/or a <strong>C&amp;F stock</strong> sheet (same layout as your daily "CFA Stock" report - a Material Code
+      column plus one column per depot, e.g. "Meerut C002"). Existing codes/stock are updated in place; new ones added.
       Nothing is saved until you review the summary and click Confirm.
     </div>
     <input type="file" id="mu-file" accept=".xlsx,.xls" onchange="handleMasterFile(event)" />
@@ -681,6 +683,23 @@ const STOCK_BY_CF={"24000012":{"C002":0,"C003":1830,"C006":85,"C008":324,"C012":
 
 // ===================== STATE =====================
 let currentRole=null, currentCustomer=null, loginRole='customer';
+// LIVE_STOCK mirrors Firebase /stock in real time: {cfCode:{productCode:qty}}.
+// It starts null (not yet loaded) and STOCK_BY_CF (the baked-in snapshot from
+// when this file was generated) is used as a fallback until it populates -
+// and permanently as a fallback for any cf/code combo Firebase doesn't have.
+let LIVE_STOCK=null, LIVE_STOCK_META=null;
+function subscribeStock(){
+  const {db,ref,onValue}=fb();
+  onValue(ref(db,'stock'),(snap)=>{
+    LIVE_STOCK=snap.val()||{};
+    if(currentRole==='customer') calcTotal();
+  });
+  onValue(ref(db,'stockMeta'),(snap)=>{
+    LIVE_STOCK_META=snap.val()||null;
+    const el=document.getElementById('stock-freshness-note');
+    if(el) el.textContent=LIVE_STOCK_META?('Stock as of '+LIVE_STOCK_META.uploadedAtDisplay):'Stock as of latest master upload';
+  });
+}
 let fbListener=null;
 let allOrders={};
 
@@ -811,17 +830,25 @@ function getFilteredProducts(catId,searchId){
 }
 
 // Returns 'in' | 'out' | 'unknown' for a product code against the
-// logged-in stockist's C&F. 'unknown' covers two real cases we should
-// not silently paint red: (1) this stockist's C&F code isn't in the
-// stock file at all (e.g. C001 - no CFA stock sheet for that code), or
-// (2) this product has no row in the stock file yet. Both need a human
-// to check, not a false "out of stock".
+// logged-in stockist's C&F. LIVE_STOCK (Firebase /stock, updated by the
+// admin's daily upload and decremented as orders come in) is checked
+// first; STOCK_BY_CF (the snapshot baked in when this file was built) is
+// only a fallback for whatever LIVE_STOCK hasn't got yet. 'unknown'
+// covers two real cases we should not silently paint red: (1) this
+// stockist's C&F code has no stock data anywhere, or (2) this product
+// has no row in either source. Both need a human to check, not a false
+// "out of stock".
 function getStockStatus(code){
   if(!currentCustomer||!currentCustomer.cf) return 'unknown';
-  const row=STOCK_BY_CF[code];
-  if(!row) return 'unknown';
-  const qty=row[currentCustomer.cf];
-  if(qty===undefined) return 'unknown';
+  const cf=currentCustomer.cf;
+  let qty;
+  if(LIVE_STOCK && LIVE_STOCK[cf] && LIVE_STOCK[cf][code]!==undefined){
+    qty=LIVE_STOCK[cf][code];
+  } else if(STOCK_BY_CF[code] && STOCK_BY_CF[code][cf]!==undefined){
+    qty=STOCK_BY_CF[code][cf];
+  } else {
+    return 'unknown';
+  }
   return qty>0?'in':'out';
 }
 
@@ -870,6 +897,33 @@ function calcTotal(){
   document.getElementById('item-count').textContent=count;
 }
 
+// Decrements live stock for each ordered item using a Firebase transaction
+// (not a plain read-then-write) - that's the part that actually matters.
+// If two customers on the same C&F both order 50 of a product sitting at
+// 100, a naive read-then-write can let both succeed (each reads 100 before
+// either writes back). A transaction re-runs its update function against
+// whatever the server's current value is if another write got there first,
+// so the second decrement is applied against 50, not the stale 100, and
+// lands correctly at 0. Clamped at 0 rather than going negative - by
+// design this does NOT block the order if stock is insufficient (e.g. the
+// SO has verbally promised backorder stock); it just means the item shows
+// red for everyone immediately after. If you'd rather hard-block
+// oversold orders, that's a different, bigger change - say so and I'll do it.
+async function decrementStockForOrder(cf,items){
+  if(!cf) return; // unknown C&F - nothing safe to decrement
+  const {db,ref,runTransaction}=fb();
+  for(const it of items){
+    try{
+      await runTransaction(ref(db,`stock/${cf}/${it.code}`),(current)=>{
+        const cur=(typeof current==='number')?current:0;
+        return Math.max(0,cur-it.qty);
+      });
+    }catch(e){
+      console.error('Stock decrement failed for',it.code,e);
+    }
+  }
+}
+
 async function submitOrder(){
   if(!fb()){alert('Firebase not ready. Please refresh.');return;}
   const items=[];
@@ -895,6 +949,7 @@ async function submitOrder(){
   };
   try{
     await pushOrder(order);
+    await decrementStockForOrder(currentCustomer.cf,items);
     document.querySelectorAll('.qty-input').forEach(i=>i.value='');
     calcTotal();
     const banner=document.getElementById('order-success');
@@ -1032,6 +1087,7 @@ async function loadContactOverrides(){
         if(o.city) c.city=o.city;
         if(o.state) c.state=o.state;
         if(o.soName) c.soName=o.soName;
+        if(o.cf) CUSTOMER_CF[c.code]=o.cf;
       }
     });
   }catch(e){
@@ -1176,6 +1232,7 @@ async function loadCustomerAdditions(){
     const additions=snap.val();
     Object.values(additions).forEach(c=>{
       if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
+      if(c.cf) CUSTOMER_CF[c.code]=c.cf;
     });
   }catch(e){
     console.error('Could not load added customers',e);
@@ -1354,13 +1411,14 @@ function handleMasterFile(evt){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const partySheetName=wb.SheetNames.find(n=>_muNorm(n).includes('party'));
       const productSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('product'));
-      if(!partySheetName && !productSheetName){
-        errEl.textContent=`Could not find a "Party List" or "Product List" sheet. Sheets found: ${wb.SheetNames.join(', ')}`;
+      const stockSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('stock'));
+      if(!partySheetName && !productSheetName && !stockSheetName){
+        errEl.textContent=`Could not find a "Party List", "Product List", or stock sheet. Sheets found: ${wb.SheetNames.join(', ')}`;
         errEl.style.display='block';
         return;
       }
 
-      const staged={newProducts:[],updProducts:[],newCustomers:[],updCustomers:[],skipped:[]};
+      const staged={newProducts:[],updProducts:[],newCustomers:[],updCustomers:[],stockUpdates:{},stockCfCodes:[],stockRowCount:0,skipped:[]};
 
       if(productSheetName){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[productSheetName],{header:1,defval:''});
@@ -1420,7 +1478,8 @@ function handleMasterFile(evt){
             city:_muFindCol(header,['City']),
             state:_muFindCol(header,['State']),
             phone:_muFindCol(header,['Phone','Mobile','Contact']),
-            email:_muFindCol(header,['Email'])
+            email:_muFindCol(header,['Email']),
+            cf:_muFindCol(header,['C & F','C&F','CF Code','C & F Code'])
           };
           if(col.code===-1||col.name===-1){
             staged.skipped.push('Party List: could not find SAP Code / Party Name columns.');
@@ -1437,7 +1496,8 @@ function handleMasterFile(evt){
                 state:col.state!==-1?String(row[col.state]||'').trim():'',
                 soName:col.soName!==-1?String(row[col.soName]||'').trim():'',
                 phone:col.phone!==-1?String(row[col.phone]||'').trim():'',
-                email:col.email!==-1?String(row[col.email]||'').trim():''
+                email:col.email!==-1?String(row[col.email]||'').trim():'',
+                cf:col.cf!==-1?String(row[col.cf]||'').trim():''
               };
               if(CUSTOMERS.find(c=>c.code===code)) staged.updCustomers.push(cust);
               else staged.newCustomers.push(cust);
@@ -1446,12 +1506,55 @@ function handleMasterFile(evt){
         }
       }
 
+      if(stockSheetName){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[stockSheetName],{header:1,defval:''});
+        const hIdx=_muFindHeaderRow(rows,['Material Code','Item Code','Product Code']);
+        if(hIdx===-1){
+          staged.skipped.push('Stock sheet: could not find a header row (looked for "Material Code").');
+        } else {
+          const header=rows[hIdx];
+          const codeCol=_muFindCol(header,['Material Code','Item Code','Product Code','Code']);
+          // Any column whose header contains a C0xx-style code (e.g. "Meerut C002")
+          // is treated as a depot stock column. This is deliberately dynamic so a
+          // new C&F depot added later needs no code change here - just a new
+          // column in the daily report with its code in the header.
+          const cfCols=[];
+          header.forEach((h,idx)=>{
+            const m=String(h==null?'':h).match(/\b(C0\d\d)\b/i);
+            if(m) cfCols.push({idx,cf:m[1].toUpperCase()});
+          });
+          if(codeCol===-1||!cfCols.length){
+            staged.skipped.push('Stock sheet: could not find Material Code column or any depot (C0xx) columns.');
+          } else {
+            for(let r=hIdx+1;r<rows.length;r++){
+              const row=rows[r];
+              if(!row) continue;
+              const rawCode=row[codeCol];
+              const code=String(rawCode==null?'':rawCode).trim();
+              // Skip the trailing "Grand Total" row and any other non-numeric
+              // Material Code - a totals row breaking this filter is exactly
+              // the bug that showed up on the first version of this feature.
+              if(!/^\d+$/.test(code)) continue;
+              cfCols.forEach(({idx,cf})=>{
+                const v=row[idx];
+                const qty=(typeof v==='number')?v:(parseFloat(v)||0);
+                if(!staged.stockUpdates[cf]) staged.stockUpdates[cf]={};
+                staged.stockUpdates[cf][code]=qty;
+              });
+              staged.stockRowCount++;
+            }
+            staged.stockCfCodes=cfCols.map(c=>c.cf);
+          }
+        }
+      }
+
       _muStaged=staged;
       const lines=[];
       lines.push(`<strong>Products:</strong> ${staged.newProducts.length} new, ${staged.updProducts.length} to update`);
       lines.push(`<strong>Customers:</strong> ${staged.newCustomers.length} new, ${staged.updCustomers.length} to update`);
+      if(staged.stockRowCount) lines.push(`<strong>Stock:</strong> ${staged.stockRowCount} products x depots ${staged.stockCfCodes.join(', ')} - this will overwrite live stock for those depot/product combinations.`);
       if(staged.skipped.length) lines.push(`<span style="color:#b91c1c">Issues: ${staged.skipped.join(' | ')}</span>`);
-      const totalRows=staged.newProducts.length+staged.updProducts.length+staged.newCustomers.length+staged.updCustomers.length;
+      const totalRows=staged.newProducts.length+staged.updProducts.length+staged.newCustomers.length+staged.updCustomers.length+staged.stockRowCount;
       sumEl.innerHTML=lines.join('<br>');
       sumEl.style.display='block';
       document.getElementById('mu-confirm-btn').disabled=totalRows===0;
@@ -1473,7 +1576,7 @@ async function confirmMasterUpload(){
   const btn=document.getElementById('mu-confirm-btn');
   btn.disabled=true;
   btn.textContent='Saving...';
-  const {db,ref,set}=window._fb;
+  const {db,ref,set,update}=window._fb;
   try{
     for(const p of _muStaged.updProducts){
       await set(ref(db,`productOverrides/${p.code}`),p);
@@ -1488,10 +1591,32 @@ async function confirmMasterUpload(){
       await set(ref(db,`customerContacts/${c.code}`),c);
       const existing=CUSTOMERS.find(x=>x.code===c.code);
       if(existing) Object.assign(existing,c);
+      if(c.cf) CUSTOMER_CF[c.code]=c.cf;
     }
     for(const c of _muStaged.newCustomers){
       await set(ref(db,`customerAdditions/${c.code}`),c);
       if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
+      if(c.cf) CUSTOMER_CF[c.code]=c.cf;
+    }
+    if(_muStaged.stockRowCount){
+      // Single multi-path update rather than one set() per cell - this is
+      // hundreds of leaves (products x depots) and doing them individually
+      // would be slow and leave a half-written state if the connection
+      // drops partway through.
+      const flatUpdates={};
+      for(const cf in _muStaged.stockUpdates){
+        for(const code in _muStaged.stockUpdates[cf]){
+          flatUpdates[`stock/${cf}/${code}`]=_muStaged.stockUpdates[cf][code];
+        }
+      }
+      await update(ref(db),flatUpdates);
+      const now=new Date();
+      await set(ref(db,'stockMeta'),{
+        uploadedAt:now.getTime(),
+        uploadedAtDisplay:now.toLocaleDateString('en-IN')+' '+now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
+        cfCodes:_muStaged.stockCfCodes,
+        rowCount:_muStaged.stockRowCount
+      });
     }
     buildCatFilter();
     renderAdminProducts();
@@ -1907,6 +2032,7 @@ function exportMyOrders(){
 
   window.addEventListener('firebase-ready',()=>{
     console.log('Firebase ready!');
+    subscribeStock();
     Promise.all([
       loadContactOverrides(),
       loadCustomerAdditions(),
