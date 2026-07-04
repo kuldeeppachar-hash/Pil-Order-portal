@@ -2024,7 +2024,13 @@ function exportMyOrders(){
 }
 
 // ===================== INIT =====================
+function _sortMasterLists(){
+  PRODUCTS.sort((a,b)=>a.name.localeCompare(b.name));
+  CUSTOMERS.sort((a,b)=>a.name.localeCompare(b.name));
+}
+
 (function init(){
+  _sortMasterLists();
   const sel=document.getElementById('cust-select');
   sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
   buildCatFilter();
@@ -2039,6 +2045,7 @@ function exportMyOrders(){
       loadProductOverrides(),
       loadProductAdditions()
     ]).then(()=>{
+      _sortMasterLists();
       buildCatFilter();
       renderAdminCustomers();
       renderAdminProducts();
