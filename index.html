@@ -573,7 +573,6 @@ const PRODUCTS=[
 {code:"30001504",name:"SMART PET FEED SUPP. SYRUP 1X200ML",cat:"Pet Care",uom:"PCS",mrp:272.25,ptd:60.5,ptr:72.6,shipper:60},
 {code:"30001785",name:"DERMOPIL PET SHAMPOO 1X200ml",cat:"Pet Care",uom:"PCS",mrp:292.0,ptd:88.0,ptr:105.6,shipper:24},
 {code:"30001841",name:"DERMACARE NIP CARE CREAM (1X30GM)",cat:"Skin Care",uom:"PCS",mrp:155.7,ptd:48.5,ptr:58.2,shipper:240},
-{code:"30001841",name:"DERMACARE NIPCARE CREAM",cat:"Skin Care",uom:"PCS",mrp:175.2,ptd:49.5,ptr:44.0,shipper:50},
 {code:"30001869",name:"CALPIL PET FEED SUPP. SYRUP 1X200ml",cat:"Pet Care",uom:"PCS",mrp:158.8,ptd:42.0,ptr:50.4,shipper:18},
 {code:"30001876",name:"MANPIL SUPER-20 (30X1X4 TABS)",cat:"Vitamins / Nutrition",uom:"BOX",mrp:4941.0,ptd:170.0,ptr:204.0,shipper:56},
 {code:"30001886",name:"SCARNIL CREAM 1X50GM",cat:"Skin Care",uom:"PCS",mrp:382.5,ptd:138.0,ptr:165.6,shipper:120},
@@ -1264,6 +1263,7 @@ async function saveAddProduct(){
   try{
     await set(ref(db,`productAdditions/${code}`),prod);
     PRODUCTS.push(prod);
+    _sortMasterLists();
     buildCatFilter();
     renderAdminProducts();
     renderProducts();
@@ -1346,6 +1346,7 @@ async function saveAddCustomer(){
   try{
     await set(ref(db,`customerAdditions/${code}`),cust);
     CUSTOMERS.push(cust);
+    _sortMasterLists();
     renderAdminCustomers();
     const sel=document.getElementById('cust-select');
     if(sel) sel.innerHTML=CUSTOMERS.map(c=>`<option value="${c.code}">${c.name} (${c.city})</option>`).join('');
@@ -1619,6 +1620,7 @@ async function confirmMasterUpload(){
       });
     }
     buildCatFilter();
+    _sortMasterLists();
     renderAdminProducts();
     renderAdminCustomers();
     renderProducts();
