@@ -177,6 +177,7 @@
       <span class="realtime-badge">Live</span>
       <span id="stock-freshness-note" style="font-size:11px;color:var(--color-text-secondary)"></span>
       <span class="badge badge-cust" id="cust-name-badge"></span>
+      <button class="btn btn-sm" id="pwa-install-btn" style="display:none" onclick="triggerPwaInstall()"><i class="ti ti-download"></i> Install app</button>
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
   </div>
@@ -267,6 +268,7 @@
     <div style="display:flex;align-items:center;gap:10px">
       <span class="realtime-badge">Live</span>
       <span class="badge badge-admin">Administrator</span>
+      <button class="btn btn-sm" id="pwa-install-btn-admin" style="display:none" onclick="triggerPwaInstall()"><i class="ti ti-download"></i> Install app</button>
       <button class="btn btn-sm" onclick="requireOwner(openMasterUpload)"><i class="ti ti-upload"></i> Upload master data</button>
       <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
@@ -2066,6 +2068,42 @@ function _sortMasterLists(){
 })();
 </script>
 <script>
+let _deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+    btn.style.display = 'inline-flex';
+  });
+});
+
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+    btn.style.display = 'none';
+  });
+});
+
+async function triggerPwaInstall(){
+  if(!_deferredInstallPrompt){
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if(isIOS){
+      alert('On iPhone/iPad: tap the Share icon in Safari, then "Add to Home Screen". Chrome on iOS cannot install apps directly \u2014 this is an Apple restriction, not something we can fix from the site.');
+    } else {
+      alert('Install option is not available right now. Open this in Chrome, browse for a few seconds, then try again \u2014 or use Chrome\'s menu (\u22ee) \u2192 "Install app" / "Add to Home screen".');
+    }
+    return;
+  }
+  _deferredInstallPrompt.prompt();
+  const { outcome } = await _deferredInstallPrompt.userChoice;
+  console.log('PWA install outcome:', outcome);
+  _deferredInstallPrompt = null;
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+    btn.style.display = 'none';
+  });
+}
+
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW registration failed:',e));
