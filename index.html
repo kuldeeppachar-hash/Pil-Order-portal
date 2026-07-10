@@ -2073,6 +2073,11 @@ function _sortMasterLists(){
 <script>
 let _deferredInstallPrompt = null;
 
+function _isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _deferredInstallPrompt = e;
@@ -2080,6 +2085,15 @@ window.addEventListener('beforeinstallprompt', (e) => {
     btn.style.display = 'inline-flex';
   });
 });
+
+// iOS never fires beforeinstallprompt - show button immediately with manual instructions instead
+if(_isIOS()){
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin, #pwa-install-btn-login').forEach(btn => {
+      btn.style.display = 'inline-flex';
+    });
+  });
+}
 
 window.addEventListener('appinstalled', () => {
   _deferredInstallPrompt = null;
