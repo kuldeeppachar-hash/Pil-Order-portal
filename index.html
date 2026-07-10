@@ -141,7 +141,10 @@
 
 <!-- ===================== LOGIN ===================== -->
 <div id="s-login" class="screen active">
-  <div class="topbar"><span class="logo">PIL <span>Order Portal</span></span></div>
+  <div class="topbar">
+    <span class="logo">PIL <span>Order Portal</span></span>
+    <button class="btn btn-sm" id="pwa-install-btn-login" style="display:none" onclick="triggerPwaInstall()"><i class="ti ti-download"></i> Install app</button>
+  </div>
   <div class="login-screen-inner">
     <div class="login-card">
       <h2>PIL Order Portal</h2>
@@ -2073,14 +2076,14 @@ let _deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _deferredInstallPrompt = e;
-  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin, #pwa-install-btn-login').forEach(btn => {
     btn.style.display = 'inline-flex';
   });
 });
 
 window.addEventListener('appinstalled', () => {
   _deferredInstallPrompt = null;
-  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin, #pwa-install-btn-login').forEach(btn => {
     btn.style.display = 'none';
   });
 });
@@ -2099,7 +2102,7 @@ async function triggerPwaInstall(){
   const { outcome } = await _deferredInstallPrompt.userChoice;
   console.log('PWA install outcome:', outcome);
   _deferredInstallPrompt = null;
-  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin').forEach(btn => {
+  document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin, #pwa-install-btn-login').forEach(btn => {
     btn.style.display = 'none';
   });
 }
