@@ -2026,18 +2026,18 @@ function buildSonipatExport(o,cf){
   o.items.forEach(item=>{
     const batches=(LIVE_STOCK_BATCHES&&LIVE_STOCK_BATCHES[cf]&&LIVE_STOCK_BATCHES[cf][item.code])||[];
     if(batches.length){
-      // If the customer picked a specific batch at order time, mark THAT
-      // row with the order qty. Older orders placed before batch selection
+      // Only the batch the customer actually chose (or selected) goes in the
+      // export - one row per order line, not one row per batch the product
+      // happens to have in stock. Older orders placed before batch selection
       // existed have no item.batch, so fall back to nearest-expiry (index 0).
       const chosenIdx=item.batch?batches.findIndex(b=>b.batch===item.batch):0;
-      batches.forEach((b,idx)=>{
-        aoa.push([
-          item.name, item.code, idx===(chosenIdx===-1?0:chosenIdx)?item.qty:'',
-          b.qty, b.blocked!==undefined?b.blocked:'',
-          b.batch||'', b.expiry||''
-        ]);
-        dataRowCount++;
-      });
+      const b=batches[chosenIdx===-1?0:chosenIdx];
+      aoa.push([
+        item.name, item.code, item.qty,
+        b.qty, b.blocked!==undefined?b.blocked:'',
+        b.batch||'', b.expiry||''
+      ]);
+      dataRowCount++;
     } else {
       // No batch-level data (e.g. last upload was the old wide-pivot format
       // with no Batch/Expiry column) - fall back to the aggregate qty only.
