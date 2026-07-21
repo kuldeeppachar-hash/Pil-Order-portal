@@ -207,6 +207,7 @@
                 <th>Item code</th><th>Product name</th><th>Category</th><th>UOM</th>
                 <th style="text-align:right">MRP</th><th style="text-align:right">PTD</th>
                 <th style="text-align:right">Scheme %</th>
+                <th>Batch (Expiry)</th>
                 <th style="text-align:center">Qty</th><th style="text-align:right">Amount</th>
               </tr></thead>
               <tbody id="prod-tbody"></tbody>
@@ -699,12 +700,20 @@ let currentRole=null, currentCustomer=null, loginRole='customer';
 // when this file was generated) is used as a fallback until it populates -
 // and permanently as a fallback for any cf/code combo Firebase doesn't have.
 let LIVE_STOCK=null, LIVE_STOCK_META=null;
+// LIVE_STOCK_BLOCKED / LIVE_STOCK_BATCHES mirror Firebase /stockBlocked and
+// /stockBatches - only populated when the daily upload was the long-format
+// raw SAP export (which carries Batch/Expiry/Blocked Stock). A wide-pivot
+// upload leaves these untouched, so per-C&F export formats that need batch
+// data should treat a missing entry here as "no batch info", not as zero.
+let LIVE_STOCK_BLOCKED=null, LIVE_STOCK_BATCHES=null;
 function subscribeStock(){
   const {db,ref,onValue}=fb();
   onValue(ref(db,'stock'),(snap)=>{
     LIVE_STOCK=snap.val()||{};
     if(currentRole==='customer') calcTotal();
   });
+  onValue(ref(db,'stockBlocked'),(snap)=>{ LIVE_STOCK_BLOCKED=snap.val()||{}; });
+  onValue(ref(db,'stockBatches'),(snap)=>{ LIVE_STOCK_BATCHES=snap.val()||{}; });
   onValue(ref(db,'stockMeta'),(snap)=>{
     LIVE_STOCK_META=snap.val()||null;
     const el=document.getElementById('stock-freshness-note');
@@ -870,6 +879,33 @@ function applyStockStyle(inputEl,status){
   inputEl.title=status==='in'?'In stock at your C&F':status==='out'?'Out of stock at your C&F':'Stock data not available';
 }
 
+// Batches under 6 months to expiry (from today, the order date) are
+// flagged red so the stockist can see at a glance which lot is close to
+// expiring and choose deliberately - not just default to whatever's first.
+const SIX_MONTHS_MS=182*24*60*60*1000;
+function _getBatchesFor(code){
+  if(!currentCustomer||!currentCustomer.cf) return [];
+  return (LIVE_STOCK_BATCHES&&LIVE_STOCK_BATCHES[currentCustomer.cf]&&LIVE_STOCK_BATCHES[currentCustomer.cf][code])||[];
+}
+function _batchOptionHtml(b,idx){
+  const soon=(typeof b.expiryTs==='number')&&(b.expiryTs-Date.now()<SIX_MONTHS_MS);
+  const label=`${b.batch||'—'} (${b.expiry||'no expiry'}) · Stock ${b.qty}`;
+  return `<option value="${idx}" data-red="${soon?'1':'0'}" ${soon?'style="color:#B91C1C;font-weight:600"':''}>${soon?'⚠ ':''}${label}</option>`;
+}
+function onBatchSelectChange(sel){
+  const opt=sel.options[sel.selectedIndex];
+  const red=opt&&opt.getAttribute('data-red')==='1';
+  sel.style.color=red?'#B91C1C':'';
+  sel.style.fontWeight=red?'600':'';
+}
+function renderBatchCell(code){
+  const batches=_getBatchesFor(code);
+  if(!batches.length) return '<span style="color:var(--color-text-secondary);font-size:12px">—</span>';
+  const opts=batches.map((b,idx)=>_batchOptionHtml(b,idx)).join('');
+  const nearRed=(typeof batches[0].expiryTs==='number')&&(batches[0].expiryTs-Date.now()<SIX_MONTHS_MS);
+  return `<select class="batch-select" id="batch-${code}" data-code="${code}" onchange="onBatchSelectChange(this)" style="font-size:12px;padding:3px 4px;max-width:220px;${nearRed?'color:#B91C1C;font-weight:600':''}">${opts}</select>`;
+}
+
 function renderProducts(){
   const prods=getFilteredProducts('cat-filter','prod-search');
   document.getElementById('prod-tbody').innerHTML=prods.map(p=>`
@@ -881,6 +917,7 @@ function renderProducts(){
       <td style="text-align:right">${p.mrp.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600;color:#0F6E56">${p.ptd.toFixed(2)}</td>
       <td style="text-align:right;color:${p.scheme?'#B45309':'var(--color-text-secondary)'}">${p.scheme?p.scheme+'%':'—'}</td>
+      <td>${renderBatchCell(p.code)}</td>
       <td style="text-align:center"><input type="number" min="0" step="1" class="qty-input" id="qty-${p.code}" data-code="${p.code}" value="" placeholder="0" oninput="calcTotal()" /></td>
       <td style="text-align:right;font-weight:500" id="amt-${p.code}">—</td>
     </tr>`).join('');
@@ -943,7 +980,16 @@ async function submitOrder(){
     if(!inp) return;
     const qty=parseInt(inp.value)||0;
     const scheme=p.scheme||0;
-    if(qty>0) items.push({code:p.code,name:p.name,qty,ptd:p.ptd,uom:p.uom,scheme,mrp:p.mrp,shipper:p.shipper,amount:qty*p.ptd*(1-scheme/100)});
+    if(qty>0){
+      const item={code:p.code,name:p.name,qty,ptd:p.ptd,uom:p.uom,scheme,mrp:p.mrp,shipper:p.shipper,amount:qty*p.ptd*(1-scheme/100)};
+      const batchSel=document.getElementById('batch-'+p.code);
+      if(batchSel&&batchSel.options.length){
+        const batches=_getBatchesFor(p.code);
+        const chosen=batches[parseInt(batchSel.value)];
+        if(chosen){ item.batch=chosen.batch; item.expiry=chosen.expiry; }
+      }
+      items.push(item);
+    }
   });
   if(!items.length){alert('Please enter quantity for at least one product.');return;}
   const total=items.reduce((s,i)=>s+i.amount,0);
@@ -1424,14 +1470,31 @@ function handleMasterFile(evt){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       const partySheetName=wb.SheetNames.find(n=>_muNorm(n).includes('party'));
       const productSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('product'));
-      const stockSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('stock'));
+      // Sheet NAME containing "stock" is the old CFA-report convention, but the
+      // raw daily SAP export (e.g. "SAPUI5 Export") never gets renamed - so also
+      // fall back to sniffing sheet CONTENT: any sheet with both a Material/Plant
+      // style column and an Unrestricted Stock / depot-code column is a stock
+      // sheet even if its tab name says nothing of the sort.
+      let stockSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('stock'));
+      if(!stockSheetName){
+        stockSheetName=wb.SheetNames.find(n=>{
+          const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''});
+          const hIdx=_muFindHeaderRow(rows,['Material Code','Material','Item Code','Product Code']);
+          if(hIdx===-1) return false;
+          const header=rows[hIdx];
+          const hasUnrestricted=_muFindCol(header,['Unrestricted Stock'])!==-1;
+          const hasPlant=_muFindCol(header,['Plant'])!==-1;
+          const hasDepotCol=header.some(h=>/\bC0\d\d\b/i.test(String(h==null?'':h)));
+          return hasUnrestricted&&(hasPlant||hasDepotCol);
+        });
+      }
       if(!partySheetName && !productSheetName && !stockSheetName){
         errEl.textContent=`Could not find a "Party List", "Product List", or stock sheet. Sheets found: ${wb.SheetNames.join(', ')}`;
         errEl.style.display='block';
         return;
       }
 
-      const staged={newProducts:[],updProducts:[],newCustomers:[],updCustomers:[],stockUpdates:{},stockCfCodes:[],stockRowCount:0,skipped:[]};
+      const staged={newProducts:[],updProducts:[],newCustomers:[],updCustomers:[],stockUpdates:{},stockBlocked:{},stockBatches:{},stockCfCodes:[],stockRowCount:0,skipped:[]};
 
       if(productSheetName){
         const rows=XLSX.utils.sheet_to_json(wb.Sheets[productSheetName],{header:1,defval:''});
@@ -1527,6 +1590,8 @@ function handleMasterFile(evt){
         } else {
           const header=rows[hIdx];
           const codeCol=_muFindCol(header,['Material Code','Material','Item Code','Product Code','Code']);
+          const plantCol=_muFindCol(header,['Plant']);
+          const unrestrictedCol=_muFindCol(header,['Unrestricted Stock']);
           // Any column whose header contains a C0xx-style code (e.g. "Meerut C002")
           // is treated as a depot stock column. This is deliberately dynamic so a
           // new C&F depot added later needs no code change here - just a new
@@ -1536,9 +1601,61 @@ function handleMasterFile(evt){
             const m=String(h==null?'':h).match(/\b(C0\d\d)\b/i);
             if(m) cfCols.push({idx,cf:m[1].toUpperCase()});
           });
-          if(codeCol===-1||!cfCols.length){
-            staged.skipped.push('Stock sheet: could not find Material Code column or any depot (C0xx) columns.');
-          } else {
+
+          if(plantCol!==-1&&unrestrictedCol!==-1){
+            // LONG format: one row per Material x Plant x Batch (the raw daily SAP
+            // export, e.g. "SAPUI5 Export"). Plant IS the C&F code directly. Sum
+            // Unrestricted Stock across a product's batches for the qty total,
+            // and keep every batch/expiry/blocked line so per-C&F export formats
+            // that need FEFO (Sonipat's "Near Expiry" column) have real data.
+            const blockedCol=_muFindCol(header,['Blocked Stock']);
+            const batchCol=_muFindCol(header,['Batch']);
+            const expiryCol=_muFindCol(header,['Shelf Life Expiration Date','Expiry','Expiry Date']);
+            if(codeCol===-1){
+              staged.skipped.push('Stock sheet: could not find Material column.');
+            } else {
+              const cfSet=new Set();
+              for(let r=hIdx+1;r<rows.length;r++){
+                const row=rows[r];
+                if(!row) continue;
+                const code=String(row[codeCol]==null?'':row[codeCol]).trim();
+                const cf=String(row[plantCol]==null?'':row[plantCol]).trim().toUpperCase();
+                if(!/^\d+$/.test(code)||!/^C\d+$/.test(cf)) continue;
+                const qty=parseFloat(row[unrestrictedCol])||0;
+                const blocked=blockedCol!==-1?(parseFloat(row[blockedCol])||0):0;
+                const batch=batchCol!==-1?String(row[batchCol]||'').trim():'';
+                let expiry='';
+                if(expiryCol!==-1&&row[expiryCol]!==''&&row[expiryCol]!=null){
+                  const ev=row[expiryCol];
+                  expiry=(ev instanceof Date)?ev.toLocaleDateString('en-IN'):String(ev);
+                }
+                if(!staged.stockUpdates[cf]) staged.stockUpdates[cf]={};
+                staged.stockUpdates[cf][code]=(staged.stockUpdates[cf][code]||0)+qty;
+                if(!staged.stockBlocked[cf]) staged.stockBlocked[cf]={};
+                staged.stockBlocked[cf][code]=(staged.stockBlocked[cf][code]||0)+blocked;
+                if(batch||expiry){
+                  if(!staged.stockBatches[cf]) staged.stockBatches[cf]={};
+                  if(!staged.stockBatches[cf][code]) staged.stockBatches[cf][code]=[];
+                  staged.stockBatches[cf][code].push({batch,qty,blocked,expiry,expiryTs:(expiryCol!==-1&&row[expiryCol] instanceof Date)?row[expiryCol].getTime():null,expiryRaw:(expiryCol!==-1?row[expiryCol]:null)});
+                }
+                cfSet.add(cf);
+                staged.stockRowCount++;
+              }
+              staged.stockCfCodes=[...cfSet];
+              for(const cf in staged.stockBatches){
+                for(const code in staged.stockBatches[cf]){
+                  staged.stockBatches[cf][code].sort((a,b)=>{
+                    const ta=a.expiryRaw instanceof Date?a.expiryRaw.getTime():Infinity;
+                    const tb=b.expiryRaw instanceof Date?b.expiryRaw.getTime():Infinity;
+                    return ta-tb;
+                  });
+                  staged.stockBatches[cf][code].forEach(b=>delete b.expiryRaw);
+                }
+              }
+            }
+          } else if(codeCol!==-1&&cfCols.length){
+            // WIDE format: Material Code + one qty column per depot (the old
+            // manually-pivoted "CFA Stock" report). No batch/expiry available.
             for(let r=hIdx+1;r<rows.length;r++){
               const row=rows[r];
               if(!row) continue;
@@ -1557,6 +1674,8 @@ function handleMasterFile(evt){
               staged.stockRowCount++;
             }
             staged.stockCfCodes=cfCols.map(c=>c.cf);
+          } else {
+            staged.skipped.push('Stock sheet: could not find Material Code + Plant/Unrestricted Stock columns, or Material Code + depot (C0xx) columns.');
           }
         }
       }
@@ -1620,6 +1739,16 @@ async function confirmMasterUpload(){
       for(const cf in _muStaged.stockUpdates){
         for(const code in _muStaged.stockUpdates[cf]){
           flatUpdates[`stock/${cf}/${code}`]=_muStaged.stockUpdates[cf][code];
+        }
+      }
+      for(const cf in _muStaged.stockBlocked){
+        for(const code in _muStaged.stockBlocked[cf]){
+          flatUpdates[`stockBlocked/${cf}/${code}`]=_muStaged.stockBlocked[cf][code];
+        }
+      }
+      for(const cf in _muStaged.stockBatches){
+        for(const code in _muStaged.stockBatches[cf]){
+          flatUpdates[`stockBatches/${cf}/${code}`]=_muStaged.stockBatches[cf][code];
         }
       }
       await update(ref(db),flatUpdates);
@@ -1789,11 +1918,21 @@ function applyHeaderStyle(ws, numCols){
   }
 }
 
-// Admin: Export ONE order to its own formatted .xlsx
-function exportSingleOrder(orderId){
-  const o=allOrders[orderId];
-  if(!o){alert('Order not found.');return;}
+// ===================== PER-C&F EXPORT TEMPLATES =====================
+// Every C&F bills off a different sheet layout. To add a new depot's
+// format later: write a build*Export(o) function returning {aoa, styleFn,
+// numCols}, then add one line to CF_EXPORT_BUILDERS below. Any C&F not
+// listed here falls back to buildGenericExport (the original layout).
+const thinBorder={style:'thin',color:{rgb:'B7B7B7'}};
+const fullBorder={top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder};
 
+function _cfLookup(store,cf,code){
+  return (store&&store[cf]&&store[cf][code]!==undefined)?store[cf][code]:undefined;
+}
+
+// Generic / fallback layout - the original single format, used for any
+// C&F that doesn't have its own template defined yet.
+function buildGenericExport(o){
   const aoa=[
     ['Party / Customer Name', o.customer.name],
     ['Party Code', o.customer.code],
@@ -1805,43 +1944,147 @@ function exportSingleOrder(orderId){
     ['Item Code','Material Description','UOM','Shipper Pack','MRP (Rs)','PTD (Rs)','Scheme %','Order Qty','Amount (Rs)']
   ];
   o.items.forEach(item=>{
-    // MRP/Shipper aren't always stored on older orders placed before this
-    // field existed, so fall back to a live catalog lookup for those.
-    // Scheme/PTD are stored on the order itself (the rate in effect when
-    // the order was placed), so those always reflect what was actually billed.
     const prod=PRODUCTS.find(p=>p.code===item.code);
     aoa.push([
-      item.code,
-      item.name,
-      item.uom,
+      item.code,item.name,item.uom,
       item.shipper!==undefined?item.shipper:(prod?prod.shipper:''),
       item.mrp!==undefined?item.mrp:(prod?prod.mrp:''),
-      item.ptd,
-      item.scheme||0,
-      item.qty,
+      item.ptd,item.scheme||0,item.qty,
       parseFloat(item.amount.toFixed(2))
     ]);
   });
   aoa.push([]);
   aoa.push(['','','','','','','','Total',parseFloat(o.total.toFixed(2))]);
+  return {
+    aoa, numCols:9,
+    cols:[{wch:12},{wch:32},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}],
+    headerBlockRows:6, headerRow:7,
+    totalRow:{row:9+o.items.length,cols:[7,8]},
+    leftAlignCols:[0,1]
+  };
+}
 
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:12},{wch:32},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
+// C006 - Jaipur. Matches order_sheet_Jaipur_CFA.xlsx exactly: row 1 is a
+// single merged "PARTY NAME: <name>" cell (there's no separate value cell
+// in their template - just one string), then every product in the catalog
+// is listed (not just what was ordered), Order Qty left blank except on
+// rows the customer actually ordered. PTR = product.ptr (their sheet
+// computes it as PTD*120% via formula; we already store that value).
+function buildJaipurExport(o){
+  const aoa=[
+    [`PARTY NAME: ${o.customer.name}`],
+    ['Item Code','Material Description','UOM','Shipper Pack','MRP','PTD','PTR','Order Qty']
+  ];
+  const orderedByCode={};
+  o.items.forEach(it=>{ orderedByCode[it.code]=it.qty; });
+  PRODUCTS.forEach(p=>{
+    aoa.push([
+      p.code,p.name,p.uom,p.shipper,p.mrp,p.ptd,p.ptr,
+      orderedByCode[p.code]!==undefined?orderedByCode[p.code]:''
+    ]);
+  });
+  return {
+    aoa, numCols:8,
+    cols:[{wch:12},{wch:36},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10}],
+    headerBlockRows:0, headerRow:1, dataRowCount:PRODUCTS.length,
+    totalRow:null,
+    leftAlignCols:[0,1],
+    merges:[{s:{r:0,c:0},e:{r:0,c:7}}],
+    partyNameCell:{r:0,c:0}
+  };
+}
 
-  const thinBorder={style:'thin',color:{rgb:'B7B7B7'}};
-  const fullBorder={top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder};
+// C008 - Sonipat. Matches sonipat_CFA_order_sheet.xlsx's "SAPUI" sheet:
+// labels sit in column B with values in merged C:D cells, "Near Expiry
+// Items" labels the Batch/Expiry column pair, and - importantly - their
+// sheet is one row PER BATCH, not per item (a product with 3 batches in
+// stock gets 3 rows, each with that batch's own Stock/B.Stock/Expiry).
+// [decision] The order Qty has no defined split across batches, so the
+// full ordered qty is placed on the nearest-expiry (first) batch row only,
+// leaving Orders blank on that item's other batch rows - flag if picking
+// should instead auto-split oldest-first across batches.
+function buildSonipatExport(o,cf){
+  const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  const aoa=[
+    ['','','','','','',''],
+    ['',todayStr,'','','','',''],
+    ['','Party Name',o.customer.name,'','','',''],
+    ['','SAP Code',o.customer.code,'','','Near Expiry Items',''],
+    ['','City',o.customer.city||'','','','',''],
+    ['','','','','','',''],
+    ['Material Description','Material','Orders','Stock','B. Stock','Batch','Expiry']
+  ];
+  let dataRowCount=0;
+  o.items.forEach(item=>{
+    const batches=(LIVE_STOCK_BATCHES&&LIVE_STOCK_BATCHES[cf]&&LIVE_STOCK_BATCHES[cf][item.code])||[];
+    if(batches.length){
+      // If the customer picked a specific batch at order time, mark THAT
+      // row with the order qty. Older orders placed before batch selection
+      // existed have no item.batch, so fall back to nearest-expiry (index 0).
+      const chosenIdx=item.batch?batches.findIndex(b=>b.batch===item.batch):0;
+      batches.forEach((b,idx)=>{
+        aoa.push([
+          item.name, item.code, idx===(chosenIdx===-1?0:chosenIdx)?item.qty:'',
+          b.qty, b.blocked!==undefined?b.blocked:'',
+          b.batch||'', b.expiry||''
+        ]);
+        dataRowCount++;
+      });
+    } else {
+      // No batch-level data (e.g. last upload was the old wide-pivot format
+      // with no Batch/Expiry column) - fall back to the aggregate qty only.
+      const stockQty=_cfLookup(LIVE_STOCK,cf,item.code);
+      const blocked=_cfLookup(LIVE_STOCK_BLOCKED,cf,item.code);
+      aoa.push([
+        item.name, item.code, item.qty,
+        stockQty!==undefined?stockQty:'',
+        blocked!==undefined?blocked:'', '', ''
+      ]);
+      dataRowCount++;
+    }
+  });
+  return {
+    aoa, numCols:7,
+    cols:[{wch:32},{wch:12},{wch:8},{wch:8},{wch:8},{wch:14},{wch:12}],
+    headerBlockRows:0, headerRow:6, dataRowCount,
+    totalRow:null,
+    leftAlignCols:[0],
+    merges:[
+      {s:{r:1,c:1},e:{r:1,c:3}},
+      {s:{r:2,c:2},e:{r:2,c:3}},
+      {s:{r:3,c:2},e:{r:3,c:3}},
+      {s:{r:3,c:5},e:{r:3,c:6}},
+      {s:{r:4,c:2},e:{r:4,c:3}}
+    ],
+    boldCells:[{r:1,c:1},{r:2,c:1},{r:2,c:2},{r:3,c:1},{r:3,c:2},{r:3,c:5},{r:4,c:1},{r:4,c:2}]
+  };
+}
 
-  // Rows 1-6: bold + centered label AND value cells
-  for(let r=0;r<6;r++){
+const CF_EXPORT_BUILDERS={
+  'C006': buildJaipurExport,
+  'C008': buildSonipatExport
+};
+
+function _applyExportStyles(ws,layout,itemCount){
+  const {numCols,headerBlockRows,headerRow,totalRow,leftAlignCols}=layout;
+  const dataRowCount=layout.dataRowCount!==undefined?layout.dataRowCount:itemCount;
+  if(layout.merges) ws['!merges']=(ws['!merges']||[]).concat(layout.merges);
+  for(let r=0;r<headerBlockRows;r++){
     [0,1].forEach(c=>{
       const ref=XLSX.utils.encode_cell({r,c});
       if(ws[ref]) ws[ref].s={font:{bold:true},alignment:{horizontal:'center',vertical:'center'}};
     });
   }
-
-  const numCols=9;
-  // Product table header row: bold + highlighted + bordered, single row only
-  const headerRow=7;
+  if(layout.boldCells){
+    layout.boldCells.forEach(({r,c})=>{
+      const ref=XLSX.utils.encode_cell({r,c});
+      if(ws[ref]) ws[ref].s={font:{bold:true},alignment:{horizontal:'left',vertical:'center'}};
+    });
+  }
+  if(layout.partyNameCell){
+    const ref=XLSX.utils.encode_cell(layout.partyNameCell);
+    if(ws[ref]) ws[ref].s={font:{bold:true,size:12},alignment:{horizontal:'left',vertical:'center'}};
+  }
   for(let c=0;c<numCols;c++){
     const ref=XLSX.utils.encode_cell({r:headerRow,c});
     if(ws[ref]) ws[ref].s={
@@ -1851,32 +2094,44 @@ function exportSingleOrder(orderId){
       border:fullBorder
     };
   }
-
-  // Product data rows: bordered, text left-aligned, numbers centered
-  const firstDataRow=headerRow+1;
-  const lastDataRow=firstDataRow+o.items.length-1;
+  const firstDataRow=headerRow+1, lastDataRow=firstDataRow+dataRowCount-1;
   for(let r=firstDataRow;r<=lastDataRow;r++){
     for(let c=0;c<numCols;c++){
       const ref=XLSX.utils.encode_cell({r,c});
       if(!ws[ref]) continue;
       ws[ref].s={
         border:fullBorder,
-        alignment:{horizontal:c<=1?'left':'center',vertical:'center'}
+        alignment:{horizontal:leftAlignCols.includes(c)?'left':'center',vertical:'center'}
       };
     }
   }
+  if(totalRow){
+    totalRow.cols.forEach(c=>{
+      const ref=XLSX.utils.encode_cell({r:totalRow.row,c});
+      if(ws[ref]) ws[ref].s={
+        font:{bold:true,color:{rgb:'0F6E56'}},
+        fill:{fgColor:{rgb:'E1F5EE'}},
+        border:fullBorder,
+        alignment:{horizontal:'center',vertical:'center'}
+      };
+    });
+  }
+}
 
-  // Total row: bold, bordered, highlighted
-  const totalRow=lastDataRow+2;
-  [7,8].forEach(c=>{
-    const ref=XLSX.utils.encode_cell({r:totalRow,c});
-    if(ws[ref]) ws[ref].s={
-      font:{bold:true,color:{rgb:'0F6E56'}},
-      fill:{fgColor:{rgb:'E1F5EE'}},
-      border:fullBorder,
-      alignment:{horizontal:'center',vertical:'center'}
-    };
-  });
+// Admin: Export ONE order to its own formatted .xlsx, using the layout
+// registered for that order's C&F (CF_EXPORT_BUILDERS), or the generic
+// layout if that C&F has no template yet.
+function exportSingleOrder(orderId){
+  const o=allOrders[orderId];
+  if(!o){alert('Order not found.');return;}
+
+  const cf=CUSTOMER_CF[o.customer.code]||null;
+  const builder=cf&&CF_EXPORT_BUILDERS[cf]?CF_EXPORT_BUILDERS[cf]:buildGenericExport;
+  const layout=builder(o,cf);
+
+  const ws=XLSX.utils.aoa_to_sheet(layout.aoa);
+  ws['!cols']=layout.cols;
+  _applyExportStyles(ws,layout,o.items.length);
 
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Order');
