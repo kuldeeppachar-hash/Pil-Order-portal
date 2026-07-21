@@ -2072,8 +2072,10 @@ function buildSonipatExport(o,cf){
 }
 
 const CF_EXPORT_BUILDERS={
-  'C006': buildJaipurExport,
-  'C008': buildSonipatExport
+  'C006': buildJaipurExport,   // Jaipur
+  'C008': buildSonipatExport,  // Sonipat
+  'C002': buildJaipurExport,   // Meerut - same format as Jaipur
+  'C003': buildSonipatExport   // Ludhiana - same format as Sonipat
 };
 
 function _applyExportStyles(ws,layout,itemCount){
