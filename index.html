@@ -1467,7 +1467,7 @@ function handleMasterFile(evt){
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
       const partySheetName=wb.SheetNames.find(n=>_muNorm(n).includes('party'));
       const productSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('product'));
       // Sheet NAME containing "stock" is the old CFA-report convention, but the
@@ -1624,10 +1624,19 @@ function handleMasterFile(evt){
                 const qty=parseFloat(row[unrestrictedCol])||0;
                 const blocked=blockedCol!==-1?(parseFloat(row[blockedCol])||0):0;
                 const batch=batchCol!==-1?String(row[batchCol]||'').trim():'';
-                let expiry='';
+                let expiry='',expiryDate=null;
                 if(expiryCol!==-1&&row[expiryCol]!==''&&row[expiryCol]!=null){
                   const ev=row[expiryCol];
-                  expiry=(ev instanceof Date)?ev.toLocaleDateString('en-IN'):String(ev);
+                  if(ev instanceof Date){
+                    expiryDate=ev;
+                  } else if(typeof ev==='number'){
+                    // cellDates:true should already convert real date cells to
+                    // JS Date - this only fires if a cell's number format
+                    // wasn't tagged as a date. Excel's epoch is 1899-12-30.
+                    const d=new Date(Math.round((ev-25569)*86400*1000));
+                    if(!isNaN(d.getTime())) expiryDate=d;
+                  }
+                  expiry=expiryDate?expiryDate.toLocaleDateString('en-IN'):String(ev);
                 }
                 if(!staged.stockUpdates[cf]) staged.stockUpdates[cf]={};
                 staged.stockUpdates[cf][code]=(staged.stockUpdates[cf][code]||0)+qty;
@@ -1636,7 +1645,7 @@ function handleMasterFile(evt){
                 if(batch||expiry){
                   if(!staged.stockBatches[cf]) staged.stockBatches[cf]={};
                   if(!staged.stockBatches[cf][code]) staged.stockBatches[cf][code]=[];
-                  staged.stockBatches[cf][code].push({batch,qty,blocked,expiry,expiryTs:(expiryCol!==-1&&row[expiryCol] instanceof Date)?row[expiryCol].getTime():null,expiryRaw:(expiryCol!==-1?row[expiryCol]:null)});
+                  staged.stockBatches[cf][code].push({batch,qty,blocked,expiry,expiryTs:expiryDate?expiryDate.getTime():null});
                 }
                 cfSet.add(cf);
                 staged.stockRowCount++;
@@ -1645,11 +1654,10 @@ function handleMasterFile(evt){
               for(const cf in staged.stockBatches){
                 for(const code in staged.stockBatches[cf]){
                   staged.stockBatches[cf][code].sort((a,b)=>{
-                    const ta=a.expiryRaw instanceof Date?a.expiryRaw.getTime():Infinity;
-                    const tb=b.expiryRaw instanceof Date?b.expiryRaw.getTime():Infinity;
+                    const ta=typeof a.expiryTs==='number'?a.expiryTs:Infinity;
+                    const tb=typeof b.expiryTs==='number'?b.expiryTs:Infinity;
                     return ta-tb;
                   });
-                  staged.stockBatches[cf][code].forEach(b=>delete b.expiryRaw);
                 }
               }
             }
