@@ -1972,29 +1972,32 @@ function buildGenericExport(o){
   };
 }
 
-// C006 - Jaipur. Matches order_sheet_Jaipur_CFA.xlsx exactly: row 1 is a
-// single merged "PARTY NAME: <name>" cell (there's no separate value cell
-// in their template - just one string), then every product in the catalog
-// is listed (not just what was ordered), Order Qty left blank except on
-// rows the customer actually ordered. PTR = product.ptr (their sheet
-// computes it as PTD*120% via formula; we already store that value).
+// C006 - Jaipur. Row 1 is a single merged "PARTY NAME: <name> (<code>)"
+// cell - Party Code included for quick identification since multiple
+// customers can share similar names. Only rows the customer actually
+// ordered are exported (the original template listed the full catalog for
+// reference, but that made the sheet unusable to just pick up and bill -
+// only punched-quantity rows go out now).
 function buildJaipurExport(o){
   const aoa=[
-    [`PARTY NAME: ${o.customer.name}`],
+    [`PARTY NAME: ${o.customer.name} (${o.customer.code})`],
     ['Item Code','Material Description','UOM','Shipper Pack','MRP','PTD','PTR','Order Qty']
   ];
-  const orderedByCode={};
-  o.items.forEach(it=>{ orderedByCode[it.code]=it.qty; });
-  PRODUCTS.forEach(p=>{
+  o.items.forEach(item=>{
+    const prod=PRODUCTS.find(p=>p.code===item.code);
     aoa.push([
-      p.code,p.name,p.uom,p.shipper,p.mrp,p.ptd,p.ptr,
-      orderedByCode[p.code]!==undefined?orderedByCode[p.code]:''
+      item.code,item.name,item.uom,
+      item.shipper!==undefined?item.shipper:(prod?prod.shipper:''),
+      item.mrp!==undefined?item.mrp:(prod?prod.mrp:''),
+      item.ptd,
+      prod?prod.ptr:'',
+      item.qty
     ]);
   });
   return {
     aoa, numCols:8,
     cols:[{wch:12},{wch:36},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10}],
-    headerBlockRows:0, headerRow:1, dataRowCount:PRODUCTS.length,
+    headerBlockRows:0, headerRow:1, dataRowCount:o.items.length,
     totalRow:null,
     leftAlignCols:[0,1],
     merges:[{s:{r:0,c:0},e:{r:0,c:7}}],
