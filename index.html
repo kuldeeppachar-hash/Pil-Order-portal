@@ -767,6 +767,13 @@ function subscribeOrders(callback){
   if(fbListener) fbListener();
   fbListener=onValue(ordersRef,(snapshot)=>{
     const data=snapshot.val()||{};
+    // Some older/manually-edited records are missing their own `id` field
+    // (only the Firebase key identifies them). Every render/export path
+    // assumes o.id exists, so backfill it here once instead of guarding
+    // every call site separately.
+    for(const key in data){
+      if(data[key]&&!data[key].id) data[key].id=key;
+    }
     allOrders=data;
     callback(data);
   });
@@ -1121,7 +1128,11 @@ function renderHistory(){
 
 // ===================== ADMIN =====================
 function renderAdminOrders(){
-  const orders=Object.values(allOrders).sort((a,b)=>b.timestamp-a.timestamp);
+  const orders=Object.values(allOrders).filter(o=>{
+    const ok=o&&o.id&&o.customer&&Array.isArray(o.items);
+    if(!ok) console.warn('Skipping malformed order record:',o);
+    return ok;
+  }).sort((a,b)=>b.timestamp-a.timestamp);
   const cf=document.getElementById('admin-cust-filter').value;
   const sf=document.getElementById('admin-status-filter').value;
   const filtered=orders.filter(o=>(!cf||o.customer.code===cf)&&(!sf||o.status===sf));
