@@ -283,6 +283,7 @@
       <div class="nav-item" onclick="adminNav('products')" id="anav-products"><i class="ti ti-package"></i> Products</div>
       <div class="nav-item" onclick="adminNav('customers')" id="anav-customers"><i class="ti ti-users"></i> Customers</div>
       <div class="nav-item" onclick="adminNav('stockstatus')" id="anav-stockstatus"><i class="ti ti-building-warehouse"></i> Stock status</div>
+      <div class="nav-item" onclick="adminNav('paymentstatus')" id="anav-paymentstatus"><i class="ti ti-currency-rupee"></i> Payment status</div>
     </div>
     <div class="content">
       <div id="ap-orders">
@@ -373,6 +374,40 @@
           </div>
         </div>
       </div>
+      <div id="ap-paymentstatus" style="display:none">
+        <div class="page-title">Payment status
+          <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="paymentstatus-updated"></span>
+        </div>
+        <div class="filter-row">
+          <select id="ps-status-filter" onchange="renderPaymentStatus()">
+            <option value="">All statuses</option>
+            <option value="Not Due">Not Due</option>
+            <option value="Follow-up Due">Follow-up Due (30-60 days)</option>
+            <option value="Overdue 60-90">Overdue 60-90</option>
+            <option value="Overdue 90-120">Overdue 90-120</option>
+            <option value="Critical 120+">Critical 120+</option>
+          </select>
+          <input id="ps-search" placeholder="Search party..." oninput="renderPaymentStatus()" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);width:180px" />
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="requireOwner(openPaymentUpload)"><i class="ti ti-upload"></i> Upload dues file</button>
+            <button class="btn btn-excel btn-sm" onclick="exportPaymentStatus()"><i class="ti ti-file-spreadsheet"></i> Export to Excel</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr>
+                <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>SO Name</th>
+                <th style="text-align:right">Current (0-60)</th><th style="text-align:right">60-90</th>
+                <th style="text-align:right">90-120</th><th style="text-align:right">120+ (Critical)</th>
+                <th style="text-align:right">Total Due</th><th style="text-align:right">Advance/Credit</th>
+                <th>Oldest Due Date</th><th>Status</th>
+              </tr></thead>
+              <tbody id="paymentstatus-tbody"><tr><td colspan="13" class="loading-overlay">No payment data uploaded yet.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -440,6 +475,24 @@
     <div class="modal-actions">
       <button class="btn btn-sm" onclick="closeMasterUpload()">Cancel</button>
       <button class="btn btn-primary btn-sm" id="mu-confirm-btn" onclick="confirmMasterUpload()" disabled>Confirm &amp; save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="payment-upload-modal">
+  <div class="modal-box" style="width:520px">
+    <div class="modal-title">Upload payment dues (raw SAP export)</div>
+    <div style="font-size:12px;color:var(--color-text-secondary,#666);margin-bottom:10px">
+      Upload the raw ledger export (Customer, Journal Entry Date, Amount, Net Due Date, City,
+      Customer Name columns — same as your "SAPUI5 Export" sheet). This replaces the previous
+      payment status snapshot; nothing saves until you review the summary and click Confirm.
+    </div>
+    <input type="file" id="pu-file" accept=".xlsx,.xls" onchange="handlePaymentFile(event)" />
+    <div id="pu-summary" style="margin-top:12px;font-size:13px;display:none;background:#f5f5f5;border-radius:8px;padding:10px 12px;max-height:260px;overflow:auto"></div>
+    <div class="modal-err" id="pu-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closePaymentUpload()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="pu-confirm-btn" onclick="confirmPaymentUpload()" disabled>Confirm &amp; save</button>
     </div>
   </div>
 </div>
@@ -705,29 +758,13 @@ const CUSTOMERS=[
 ];
 
 // ===================== C&F STOCK AVAILABILITY =====================
-// CUSTOMER_CF maps each stockist's SAP/party code -> their C&F (CFA) code,
-// sourced from the "C & F" column of the Party List master sheet.
-// STOCK_BY_CF maps each product code -> {cfCode: qty}, sourced from the
-// CFA Stock report. Both are static snapshots baked in at build time -
-// re-generate and re-paste these two blocks whenever a fresh stock file
-// or updated Party List is available (ask Claude to redo the same steps).
 const CF_NAMES={'C001':'Jammu','C002':'Meerut','C003':'Ludhiana','C006':'Jaipur','C008':'Sonipat','C012':'Dera Bassi'};
 const CUSTOMER_CF={"2000549":"C002","2002243":"C008","2002245":"C002","2002246":"C006","2002257":"C006","2002258":"C002","2002274":"C006","2002276":"C006","2002280":"C006","2002281":"C006","2002284":"C006","2002306":"C008","2002307":"C008","2002309":"C002","2002314":"C008","2002318":"C002","2002327":"C008","2002334":"C002","2002335":"C002","2002336":"C008","2002337":"C008","2002338":"C008","2002339":"C008","2002340":"C008","2002344":"C002","2002347":"C008","2002348":"C008","2002349":"C006","2002356":"C002","2002357":"C006","2002365":"C002","2002366":"C002","2002367":"C006","2002368":"C008","2002380":"C008","2002381":"C006","2002382":"C008","2002385":"C008","2002386":"C006","2002404":"C008","2002405":"C006","2002415":"C006","2002416":"C008","2002420":"C008","2002441":"C006","2002450":"C008","2002475":"C008","2002476":"C008","2002479":"C006","2002486":"C008","2002487":"C003","2002491":"C003","2002492":"C003","2002493":"C003","2002497":"C003","2002498":"C008","2002509":"C002","2002511":"C008","2002515":"C003","2002517":"C003","2002520":"C006","2002513":"C001","2002512":"C006","2002525":"C008"};
 const STOCK_BY_CF={"24000012":{"C002":0,"C003":1830,"C006":85,"C008":324,"C012":35},"24000047":{"C002":2746,"C003":5740,"C006":2285,"C008":1813,"C012":1200},"24000048":{"C002":615,"C003":7170,"C006":3447,"C008":1624,"C012":850},"24000065":{"C002":84,"C003":1348,"C006":0,"C008":95,"C012":5},"24000115":{"C002":1770,"C003":25370,"C006":26810,"C008":22366,"C012":2850},"24000116":{"C002":0,"C003":12220,"C006":14215,"C008":3968,"C012":3540},"24000132":{"C002":0,"C003":0,"C006":228,"C008":0,"C012":0},"24000152":{"C002":1231,"C003":0,"C006":48,"C008":3029,"C012":1151},"24000153":{"C002":0,"C003":784,"C006":51,"C008":11,"C012":0},"24000169":{"C002":145,"C003":1609,"C006":412,"C008":162,"C012":79},"24000205":{"C002":0,"C003":87,"C006":17,"C008":72,"C012":22},"24000209":{"C002":0,"C003":34,"C006":22,"C008":99,"C012":27},"24000211":{"C002":0,"C003":0,"C006":39,"C008":0,"C012":0},"24000236":{"C002":64,"C003":104,"C006":868,"C008":192,"C012":148},"24000238":{"C002":0,"C003":66,"C006":8,"C008":0,"C012":1},"30000488":{"C002":175,"C003":1059,"C006":515,"C008":133,"C012":138},"30000495":{"C002":0,"C003":270,"C006":59,"C008":78,"C012":9},"30000496":{"C002":26,"C003":328,"C006":40,"C008":143,"C012":4},"30000497":{"C002":8,"C003":103,"C006":85,"C008":0,"C012":23},"30000605":{"C002":0,"C003":2360,"C006":1458,"C008":1250,"C012":1260},"30000608":{"C002":212,"C003":4470,"C006":0,"C008":0,"C012":60},"30000611":{"C002":102,"C003":2100,"C006":117,"C008":563,"C012":180},"30000616":{"C002":13768,"C003":40420,"C006":23664,"C008":30068,"C012":9828},"30000641":{"C002":387,"C003":5610,"C006":3248,"C008":990,"C012":1540},"30000661":{"C002":0,"C003":30372,"C006":12080,"C008":3284,"C012":3818},"30000662":{"C002":460,"C003":26582,"C006":4448,"C008":10840,"C012":420},"30000664":{"C002":1306,"C003":13752,"C006":12268,"C008":6874,"C012":2510},"30000673":{"C002":289,"C003":2578,"C006":1207,"C008":0,"C012":36},"30000691":{"C002":427,"C003":6140,"C006":4215,"C008":2802,"C012":1480},"30000702":{"C002":570,"C003":7610,"C006":2978,"C008":2117,"C012":2154},"30000705":{"C002":632,"C003":3285,"C006":543,"C008":479,"C012":1250},"30000722":{"C002":0,"C003":0,"C006":40,"C008":765,"C012":0},"30000751":{"C002":0,"C003":82,"C006":0,"C008":710,"C012":0},"30000761":{"C002":0,"C003":115,"C006":1202,"C008":1153,"C012":18},"30000773":{"C002":1517,"C003":7966,"C006":0,"C008":177,"C012":24},"30000778":{"C002":56,"C003":360,"C006":0,"C008":34,"C012":10},"30000793":{"C002":920,"C003":1520,"C006":0,"C008":0,"C012":400},"30000800":{"C002":259,"C003":946,"C006":243,"C008":868,"C012":43},"30000813":{"C002":489,"C003":4614,"C006":3926,"C008":3419,"C012":1826},"30000823":{"C002":580,"C003":550,"C006":570,"C008":2,"C012":1520},"30000826":{"C002":374,"C003":2352,"C006":735,"C008":0,"C012":300},"30001504":{"C002":480,"C003":406,"C006":0,"C008":483,"C012":0},"30001785":{"C002":229,"C003":24,"C006":0,"C008":116,"C012":0},"30001841":{"C002":128,"C003":0,"C006":0,"C008":0,"C012":132},"30001869":{"C002":32,"C003":0,"C006":0,"C008":58,"C012":15},"30001876":{"C002":0,"C003":302,"C006":8,"C008":9,"C012":12},"30001886":{"C002":0,"C003":0,"C006":0,"C008":0,"C012":23},"30002100":{"C002":616,"C003":680,"C006":174,"C008":170,"C012":320},"30002287":{"C002":0,"C003":0,"C006":0,"C008":0,"C012":174},"30002288":{"C002":248,"C003":0,"C006":332,"C008":324,"C012":240},"30002307":{"C002":286,"C003":762,"C006":732,"C008":499,"C012":338},"30002308":{"C002":0,"C003":2962,"C006":49,"C008":417,"C012":102},"30002423":{"C002":136,"C003":2590,"C006":6430,"C008":208,"C012":3370},"30002474":{"C002":0,"C003":1538,"C006":0,"C008":0,"C012":331},"30002568":{"C002":273,"C003":750,"C006":3230,"C008":2379,"C012":861},"30002721":{"C002":4,"C003":94,"C006":139,"C008":154,"C012":33},"30002763":{"C002":2118,"C003":9636,"C006":15856,"C008":3586,"C012":3882},"30002804":{"C002":310,"C003":5840,"C006":4267,"C008":2902,"C012":1450},"30002848":{"C002":0,"C003":49720,"C006":1393,"C008":10060,"C012":440},"30002963":{"C002":57,"C003":151,"C006":7,"C008":46,"C012":35},"30002980":{"C002":6,"C003":116,"C006":304,"C008":32,"C012":60},"30003024":{"C002":330,"C003":365,"C006":1322,"C008":1250,"C012":0},"30003092":{"C002":0,"C003":255,"C006":313,"C008":334,"C012":42},"30003106":{"C002":2466,"C003":8052,"C006":3082,"C008":2324,"C012":8220},"30003133":{"C002":119,"C003":85,"C006":872,"C008":356,"C012":734},"30003149":{"C002":154,"C003":493,"C006":1031,"C008":505,"C012":159},"30003150":{"C002":208,"C003":326,"C006":377,"C008":448,"C012":148},"30003161":{"C002":293,"C003":122,"C006":0,"C008":0,"C012":105},"30003179":{"C002":222,"C003":836,"C006":1247,"C008":1302,"C012":145},"30003208":{"C002":2078,"C003":37190,"C006":8810,"C008":4190,"C012":40}};
 
-
 // ===================== STATE =====================
 let currentRole=null, currentCustomer=null, loginRole='customer';
-// LIVE_STOCK mirrors Firebase /stock in real time: {cfCode:{productCode:qty}}.
-// It starts null (not yet loaded) and STOCK_BY_CF (the baked-in snapshot from
-// when this file was generated) is used as a fallback until it populates -
-// and permanently as a fallback for any cf/code combo Firebase doesn't have.
 let LIVE_STOCK=null, LIVE_STOCK_META=null;
-// LIVE_STOCK_BLOCKED / LIVE_STOCK_BATCHES mirror Firebase /stockBlocked and
-// /stockBatches - only populated when the daily upload was the long-format
-// raw SAP export (which carries Batch/Expiry/Blocked Stock). A wide-pivot
-// upload leaves these untouched, so per-C&F export formats that need batch
-// data should treat a missing entry here as "no batch info", not as zero.
 let LIVE_STOCK_BLOCKED=null, LIVE_STOCK_BATCHES=null;
 function subscribeStock(){
   const {db,ref,onValue}=fb();
@@ -767,10 +804,6 @@ function subscribeOrders(callback){
   if(fbListener) fbListener();
   fbListener=onValue(ordersRef,(snapshot)=>{
     const data=snapshot.val()||{};
-    // Some older/manually-edited records are missing their own `id` field
-    // (only the Firebase key identifies them). Every render/export path
-    // assumes o.id exists, so backfill it here once instead of guarding
-    // every call site separately.
     for(const key in data){
       if(data[key]&&!data[key].id) data[key].id=key;
     }
@@ -805,11 +838,11 @@ async function doLogin(){
     renderAdminCustomers();
     renderAdminProducts();
     subscribeOrders((data)=>{renderAdminOrders();});
+    subscribePaymentStatus();
   } else {
     const sel=document.getElementById('cust-select');
     const candidate=CUSTOMERS.find(c=>c.code===sel.value);
     if(!candidate){err.textContent='Please select your account.';err.style.display='block';return;}
-    // Fetch this customer's password from Firebase (fallback to default if not set)
     try{
       const {db,ref,get}=fb();
       const snap=await get(ref(db,`customerPasswords/${candidate.code}`));
@@ -857,22 +890,18 @@ function custNav(p){
 }
 
 function adminNav(p){
-  ['orders','products','customers','stockstatus'].forEach(x=>{
+  ['orders','products','customers','stockstatus','paymentstatus'].forEach(x=>{
     document.getElementById('ap-'+x).style.display=x===p?'block':'none';
     document.getElementById('anav-'+x).classList.toggle('active',x===p);
   });
   if(p==='stockstatus') renderStockStatus();
+  if(p==='paymentstatus') renderPaymentStatus();
 }
 
 // ===================== STOCK STATUS =====================
-// Fixed column order (not derived from whatever happens to be in Firebase)
-// so the sheet doesn't reshuffle columns between uploads.
 const STOCK_STATUS_CFS=Object.keys(CF_NAMES);
 
 function _stockStatusQty(cf,code){
-  // Prefer live Firebase stock (today's upload) over the baked-in snapshot
-  // from when this file was built - the whole point of this view is "as of
-  // last upload", so stale build-time numbers should never win.
   if(LIVE_STOCK&&LIVE_STOCK[cf]&&LIVE_STOCK[cf][code]!==undefined) return LIVE_STOCK[cf][code];
   if(STOCK_BY_CF[code]&&STOCK_BY_CF[code][cf]!==undefined) return STOCK_BY_CF[code][cf];
   return '';
@@ -938,15 +967,6 @@ function getFilteredProducts(catId,searchId){
   return PRODUCTS.filter(p=>(!cat||p.cat===cat)&&(!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q)));
 }
 
-// Returns 'in' | 'out' | 'unknown' for a product code against the
-// logged-in stockist's C&F. LIVE_STOCK (Firebase /stock, updated by the
-// admin's daily upload and decremented as orders come in) is checked
-// first; STOCK_BY_CF (the snapshot baked in when this file was built) is
-// only a fallback for whatever LIVE_STOCK hasn't got yet. 'unknown'
-// covers two real cases we should not silently paint red: (1) this
-// stockist's C&F code has no stock data anywhere, or (2) this product
-// has no row in either source. Both need a human to check, not a false
-// "out of stock".
 function getStockStatus(code){
   if(!currentCustomer||!currentCustomer.cf) return 'unknown';
   const cf=currentCustomer.cf;
@@ -968,9 +988,6 @@ function applyStockStyle(inputEl,status){
   inputEl.title=status==='in'?'In stock at your C&F':status==='out'?'Out of stock at your C&F':'Stock data not available';
 }
 
-// Batches under 6 months to expiry (from today, the order date) are
-// flagged red so the stockist can see at a glance which lot is close to
-// expiring and choose deliberately - not just default to whatever's first.
 const SIX_MONTHS_MS=182*24*60*60*1000;
 function _getBatchesFor(code){
   if(!currentCustomer||!currentCustomer.cf) return [];
@@ -1013,10 +1030,6 @@ function renderProducts(){
   calcTotal();
 }
 
-// Scheme % is auto-applied here: amount = qty x PTD x (1 - scheme/100).
-// Scheme comes straight from the product record (editable in Admin ->
-// Product catalogue), so there is nothing for the stockist to toggle -
-// the discount just shows up in the Amount column as they type qty.
 function calcTotal(){
   let total=0,count=0;
   PRODUCTS.forEach(p=>{
@@ -1034,20 +1047,8 @@ function calcTotal(){
   document.getElementById('item-count').textContent=count;
 }
 
-// Decrements live stock for each ordered item using a Firebase transaction
-// (not a plain read-then-write) - that's the part that actually matters.
-// If two customers on the same C&F both order 50 of a product sitting at
-// 100, a naive read-then-write can let both succeed (each reads 100 before
-// either writes back). A transaction re-runs its update function against
-// whatever the server's current value is if another write got there first,
-// so the second decrement is applied against 50, not the stale 100, and
-// lands correctly at 0. Clamped at 0 rather than going negative - by
-// design this does NOT block the order if stock is insufficient (e.g. the
-// SO has verbally promised backorder stock); it just means the item shows
-// red for everyone immediately after. If you'd rather hard-block
-// oversold orders, that's a different, bigger change - say so and I'll do it.
 async function decrementStockForOrder(cf,items){
-  if(!cf) return; // unknown C&F - nothing safe to decrement
+  if(!cf) return;
   const {db,ref,runTransaction}=fb();
   for(const it of items){
     try{
@@ -1217,11 +1218,6 @@ function renderAdminCustomers(){
     </tr>`).join('');
 }
 
-// ---- Manual contact edit (phone/email) ----
-// CUSTOMERS is a hardcoded array baked into this file, so edits here don't
-// touch that array permanently - they're saved to Firebase under
-// customerContacts/{code} and merged on top of CUSTOMERS every time the
-// app loads, the same pattern customerPasswords already uses.
 async function loadContactOverrides(){
   const {db,ref,get}=window._fb;
   try{
@@ -1283,16 +1279,6 @@ async function saveEditContact(){
   }
 }
 
-// ---- Owner-only gate for Add/Edit Product, Add/Edit Customer, Upload ----
-// The shared ADMIN_PASSWORD gets every manager into the admin screen, so it
-// cannot be trusted to protect catalogue/customer edits. This reuses the
-// same Firebase Auth sign-in as "Manage Passwords" - one owner session
-// unlocks all owner-only actions on this page. NOTE: this is a UI gate
-// only. The real lock has to be Firebase Database Rules that require
-// auth.uid == your owner UID to write to productOverrides, productAdditions,
-// customerAdditions and customerContacts - without that server-side rule,
-// a manager who opens devtools can still call these functions or write to
-// the database directly, regardless of what this modal shows.
 let _ownerGatePending=null;
 
 function requireOwner(action){
@@ -1328,10 +1314,6 @@ async function ownerGateSignIn(){
   }
 }
 
-// ---- Manual product edit (mrp/ptd/scheme/shipper/name/cat/uom) ----
-// Same pattern as customerContacts: PRODUCTS is hardcoded in this file, so
-// edits are saved to Firebase under productOverrides/{code} and merged on
-// top of PRODUCTS every time the app loads.
 async function loadProductOverrides(){
   const {db,ref,get}=window._fb;
   try{
@@ -1355,11 +1337,6 @@ async function loadProductOverrides(){
   }
 }
 
-// ---- Manually-added products/customers ----
-// New rows (not in the hardcoded PRODUCTS/CUSTOMERS arrays) are saved to
-// Firebase under productAdditions/{code} and customerAdditions/{code}, and
-// pushed into the in-memory arrays on load so they behave like any other
-// row (orderable, editable, exportable).
 async function loadProductAdditions(){
   const {db,ref,get}=window._fb;
   try{
@@ -1458,8 +1435,6 @@ async function saveEditProduct(){
     await set(ref(db,`productOverrides/${code}`),{name,cat,uom,shipper,mrp,ptd,scheme});
     const p=PRODUCTS.find(x=>x.code===code);
     if(p){Object.assign(p,{name,cat,uom,shipper,mrp,ptd,scheme});}
-    // also update it in productAdditions if it was a manually-added product,
-    // so a future page load doesn't reload the stale original values
     const {get}=window._fb;
     const addSnap=await get(ref(db,`productAdditions/${code}`));
     if(addSnap.exists()) await set(ref(db,`productAdditions/${code}`),{code,name,cat,uom,shipper,mrp,ptd,scheme});
@@ -1508,10 +1483,6 @@ async function saveAddCustomer(){
 }
 
 // ---- Master data bulk upload (Party List + Product List Excel) ----
-// Parsed rows are staged in memory (window._muStaged) and NOT written to
-// Firebase until the admin reviews the summary and clicks Confirm. This is
-// deliberate: a bad column mapping should never silently overwrite live
-// pricing/scheme data for the whole catalogue.
 let _muStaged=null;
 
 function _muNorm(s){
@@ -1563,11 +1534,6 @@ function handleMasterFile(evt){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
       const partySheetName=wb.SheetNames.find(n=>_muNorm(n).includes('party'));
       const productSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('product'));
-      // Sheet NAME containing "stock" is the old CFA-report convention, but the
-      // raw daily SAP export (e.g. "SAPUI5 Export") never gets renamed - so also
-      // fall back to sniffing sheet CONTENT: any sheet with both a Material/Plant
-      // style column and an Unrestricted Stock / depot-code column is a stock
-      // sheet even if its tab name says nothing of the sort.
       let stockSheetName=wb.SheetNames.find(n=>_muNorm(n).includes('stock'));
       if(!stockSheetName){
         stockSheetName=wb.SheetNames.find(n=>{
@@ -1685,10 +1651,6 @@ function handleMasterFile(evt){
           const codeCol=_muFindCol(header,['Material Code','Material','Item Code','Product Code','Code']);
           const plantCol=_muFindCol(header,['Plant']);
           const unrestrictedCol=_muFindCol(header,['Unrestricted Stock']);
-          // Any column whose header contains a C0xx-style code (e.g. "Meerut C002")
-          // is treated as a depot stock column. This is deliberately dynamic so a
-          // new C&F depot added later needs no code change here - just a new
-          // column in the daily report with its code in the header.
           const cfCols=[];
           header.forEach((h,idx)=>{
             const m=String(h==null?'':h).match(/\b(C0\d\d)\b/i);
@@ -1696,11 +1658,6 @@ function handleMasterFile(evt){
           });
 
           if(plantCol!==-1&&unrestrictedCol!==-1){
-            // LONG format: one row per Material x Plant x Batch (the raw daily SAP
-            // export, e.g. "SAPUI5 Export"). Plant IS the C&F code directly. Sum
-            // Unrestricted Stock across a product's batches for the qty total,
-            // and keep every batch/expiry/blocked line so per-C&F export formats
-            // that need FEFO (Sonipat's "Near Expiry" column) have real data.
             const blockedCol=_muFindCol(header,['Blocked Stock']);
             const batchCol=_muFindCol(header,['Batch']);
             const expiryCol=_muFindCol(header,['Shelf Life Expiration Date','Expiry','Expiry Date']);
@@ -1723,9 +1680,6 @@ function handleMasterFile(evt){
                   if(ev instanceof Date){
                     expiryDate=ev;
                   } else if(typeof ev==='number'){
-                    // cellDates:true should already convert real date cells to
-                    // JS Date - this only fires if a cell's number format
-                    // wasn't tagged as a date. Excel's epoch is 1899-12-30.
                     const d=new Date(Math.round((ev-25569)*86400*1000));
                     if(!isNaN(d.getTime())) expiryDate=d;
                   }
@@ -1755,16 +1709,11 @@ function handleMasterFile(evt){
               }
             }
           } else if(codeCol!==-1&&cfCols.length){
-            // WIDE format: Material Code + one qty column per depot (the old
-            // manually-pivoted "CFA Stock" report). No batch/expiry available.
             for(let r=hIdx+1;r<rows.length;r++){
               const row=rows[r];
               if(!row) continue;
               const rawCode=row[codeCol];
               const code=String(rawCode==null?'':rawCode).trim();
-              // Skip the trailing "Grand Total" row and any other non-numeric
-              // Material Code - a totals row breaking this filter is exactly
-              // the bug that showed up on the first version of this feature.
               if(!/^\d+$/.test(code)) continue;
               cfCols.forEach(({idx,cf})=>{
                 const v=row[idx];
@@ -1832,10 +1781,6 @@ async function confirmMasterUpload(){
       if(c.cf) CUSTOMER_CF[c.code]=c.cf;
     }
     if(_muStaged.stockRowCount){
-      // Single multi-path update rather than one set() per cell - this is
-      // hundreds of leaves (products x depots) and doing them individually
-      // would be slow and leave a half-written state if the connection
-      // drops partway through.
       const flatUpdates={};
       for(const cf in _muStaged.stockUpdates){
         for(const code in _muStaged.stockUpdates[cf]){
@@ -1881,11 +1826,6 @@ async function confirmMasterUpload(){
 }
 
 // ---- Owner-only password manager ----
-// Separate from the shared ADMIN_PASSWORD gate. Requires a real Firebase
-// Auth sign-in; the database rules (set server-side, not in this file)
-// only grant read/write on customerPasswords to your specific UID, so
-// this button being visible does not by itself grant access - the rules
-// are the actual enforcement.
 function openPasswordManager(){
   document.getElementById('pwmgr-modal').classList.add('active');
   document.getElementById('pwmgr-signin-err').style.display='none';
@@ -1949,8 +1889,6 @@ async function showPasswordList(){
       </tr>`;
     }).join('');
   }catch(e){
-    // Most likely cause: rules aren't restricted to your UID yet, or
-    // you're signed in as the wrong account.
     listErr.textContent='Could not load passwords: '+e.message+'. Check that the database rules grant your account access.';
     listErr.style.display='block';
   }
@@ -1985,7 +1923,6 @@ async function doChangePassword(){
   if(newPw!==confirm){
     errEl.textContent='New passwords do not match.';errEl.style.display='block';return;
   }
-  // Verify current password
   try{
     const {db,ref,get,set}=fb();
     const snap=await get(ref(db,`customerPasswords/${currentCustomer.code}`));
@@ -2001,13 +1938,325 @@ async function doChangePassword(){
   }
 }
 
+// ===================== PAYMENT STATUS (AGEING) =====================
+// Ageing is computed from each row's own `Net Due Date` - NOT entry date + a
+// flat term. The raw SAP export already carries party/product-specific terms
+// (30/45/60 days observed), so recomputing due dates from entry date would
+// misclassify a majority of rows. Use Net Due Date as-is, always.
+//
+// Netting: per party, sort all rows oldest-due-date first. Positive amounts
+// are open invoices; negative amounts are payments/credit notes, applied
+// FIFO against the oldest still-open invoice. Any credit left over after
+// every invoice is fully paid becomes Advance/Credit Balance.
+//
+// Bucketing: days overdue = referenceDate - Net Due Date, for whatever
+// balance remains on each invoice after netting. <=60 days overdue -> bucket
+// "current"; 60-90 / 90-120 / 120+ as named. Sheet placement (see
+// exportPaymentStatus) is decided by the OLDEST unpaid invoice's bucket
+// only, so a party never appears in more than one output sheet.
+//
+// Unmatched customer codes (not in CUSTOMERS master) are kept, not dropped -
+// SO Name shows "Vacant" and Area falls back to the raw file's City column.
+
+let PAYMENT_DUES=null, PAYMENT_META=null;
+
+function subscribePaymentStatus(){
+  const {db,ref,onValue}=fb();
+  onValue(ref(db,'paymentDues'),(snap)=>{ PAYMENT_DUES=snap.val()||null; if(document.getElementById('ap-paymentstatus').style.display!=='none') renderPaymentStatus(); });
+  onValue(ref(db,'paymentMeta'),(snap)=>{
+    PAYMENT_META=snap.val()||null;
+    const el=document.getElementById('paymentstatus-updated');
+    if(el) el.textContent=PAYMENT_META?('· Last updated '+PAYMENT_META.uploadedAtDisplay+' (as of '+PAYMENT_META.referenceDateDisplay+')'):'· No upload yet';
+  });
+}
+
+function _psBucketForDaysOverdue(days){
+  if(days>120) return '120+';
+  if(days>90) return '90-120';
+  if(days>60) return '60-90';
+  return 'current';
+}
+function _psStatusLabel(days,bucket){
+  if(days<=30) return 'Not Due';
+  if(bucket==='current') return 'Follow-up Due';
+  if(bucket==='60-90') return 'Overdue 60-90';
+  if(bucket==='90-120') return 'Overdue 90-120';
+  return 'Critical 120+';
+}
+
+function computePaymentDues(rows, referenceDate){
+  const byParty={};
+  rows.forEach(r=>{
+    if(!byParty[r.code]) byParty[r.code]=[];
+    byParty[r.code].push(r);
+  });
+
+  const result={};
+  for(const code in byParty){
+    const entries=byParty[code].slice().sort((a,b)=>a.dueDate-b.dueDate);
+    const invoices=entries.filter(e=>e.amount>0).map(e=>({...e,open:e.amount}));
+    let credit=entries.filter(e=>e.amount<0).reduce((s,e)=>s+(-e.amount),0);
+
+    for(const inv of invoices){
+      if(credit<=0) break;
+      const applied=Math.min(credit,inv.open);
+      inv.open-=applied;
+      credit-=applied;
+    }
+    const advanceCredit=credit;
+
+    const buckets={current:0,'60-90':0,'90-120':0,'120+':0};
+    let oldestOpenDueDate=null, oldestOpenDays=null;
+    invoices.forEach(inv=>{
+      if(inv.open<=0) return;
+      const days=Math.floor((referenceDate-inv.dueDate)/86400000);
+      const bucket=_psBucketForDaysOverdue(days);
+      buckets[bucket]+=inv.open;
+      if(oldestOpenDueDate===null||inv.dueDate<oldestOpenDueDate){
+        oldestOpenDueDate=inv.dueDate; oldestOpenDays=days;
+      }
+    });
+
+    const totalDue=buckets.current+buckets['60-90']+buckets['90-120']+buckets['120+'];
+    if(totalDue<=0 && advanceCredit<=0) continue;
+
+    const sheetBucket=oldestOpenDueDate===null?null:_psBucketForDaysOverdue(oldestOpenDays);
+    const status=oldestOpenDueDate===null?'Not Due':_psStatusLabel(oldestOpenDays,sheetBucket);
+
+    const cust=CUSTOMERS.find(c=>c.code===code);
+    const anyRow=entries[0];
+    result[code]={
+      code,
+      name: cust?cust.name:anyRow.name,
+      area: cust?cust.city:anyRow.city,
+      state: cust?cust.state:'',
+      soName: cust?(cust.soName||'Vacant'):'Vacant',
+      matched: !!cust,
+      buckets,
+      totalDue,
+      advanceCredit,
+      oldestDueDate: oldestOpenDueDate?oldestOpenDueDate.toLocaleDateString('en-IN'):'',
+      sheetBucket,
+      status
+    };
+  }
+  return result;
+}
+
+let _puStaged=null, _puReferenceDate=null;
+
+function openPaymentUpload(){
+  _puStaged=null;
+  document.getElementById('pu-file').value='';
+  document.getElementById('pu-summary').style.display='none';
+  document.getElementById('pu-summary').innerHTML='';
+  document.getElementById('pu-err').style.display='none';
+  document.getElementById('pu-confirm-btn').disabled=true;
+  document.getElementById('payment-upload-modal').classList.add('active');
+}
+function closePaymentUpload(){
+  document.getElementById('payment-upload-modal').classList.remove('active');
+}
+
+function handlePaymentFile(evt){
+  const file=evt.target.files[0];
+  const errEl=document.getElementById('pu-err');
+  const sumEl=document.getElementById('pu-summary');
+  errEl.style.display='none';
+  document.getElementById('pu-confirm-btn').disabled=true;
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      let sheetName=null, hIdx=-1, header=null;
+      for(const name of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+        const idx=_muFindHeaderRow(rows,['Customer']);
+        if(idx===-1) continue;
+        const h=rows[idx];
+        if(_muFindCol(h,['Amount (CoCode Crcy)','Amount'])!==-1 && _muFindCol(h,['Net Due Date'])!==-1){
+          sheetName=name; hIdx=idx; header=h; break;
+        }
+      }
+      if(!sheetName){
+        errEl.textContent='Could not find a sheet with Customer, Amount and Net Due Date columns.';
+        errEl.style.display='block';
+        return;
+      }
+      const col={
+        code:_muFindCol(header,['Customer']),
+        name:_muFindCol(header,['Customer Name']),
+        city:_muFindCol(header,['City']),
+        amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
+        dueDate:_muFindCol(header,['Net Due Date'])
+      };
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
+      const parsed=[]; let skipped=0;
+      for(let r=hIdx+1;r<rows.length;r++){
+        const row=rows[r];
+        if(!row) continue;
+        const code=String(row[col.code]==null?'':row[col.code]).trim();
+        const amtRaw=row[col.amount];
+        const dd=row[col.dueDate];
+        if(!code || amtRaw===''||amtRaw==null || !dd){ if(code) skipped++; continue; }
+        const amount=parseFloat(amtRaw)||0;
+        let dueDate = dd instanceof Date ? dd : new Date(Math.round(((parseFloat(dd)||0)-25569)*86400*1000));
+        if(isNaN(dueDate.getTime())){ skipped++; continue; }
+        parsed.push({
+          code, amount, dueDate,
+          name: col.name!==-1?String(row[col.name]||'').trim():'',
+          city: col.city!==-1?String(row[col.city]||'').trim():''
+        });
+      }
+      if(!parsed.length){
+        errEl.textContent='No usable rows found (need Customer, Amount, Net Due Date on every row).';
+        errEl.style.display='block';
+        return;
+      }
+      _puReferenceDate=new Date();
+      const computed=computePaymentDues(parsed,_puReferenceDate);
+      _puStaged={rows:parsed,computed};
+
+      const parties=Object.values(computed);
+      const unmatched=parties.filter(p=>!p.matched);
+      const critical=parties.filter(p=>p.sheetBucket==='120+').length;
+      const lines=[];
+      lines.push(`<strong>${parsed.length}</strong> ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
+      lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
+      if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) not found in your customer master - kept, SO Name shown as "Vacant": ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
+      lines.push(`This will replace the current Payment Status snapshot.`);
+      sumEl.innerHTML=lines.join('<br>');
+      sumEl.style.display='block';
+      document.getElementById('pu-confirm-btn').disabled=false;
+    }catch(err){
+      errEl.textContent='Could not read this file: '+err.message;
+      errEl.style.display='block';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmPaymentUpload(){
+  if(!_puStaged) return;
+  const btn=document.getElementById('pu-confirm-btn');
+  const errEl=document.getElementById('pu-err');
+  btn.disabled=true; btn.textContent='Saving...';
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,'paymentDues'),_puStaged.computed);
+    await set(ref(db,'paymentMeta'),{
+      uploadedAt:Date.now(),
+      uploadedAtDisplay:new Date().toLocaleDateString('en-IN')+' '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
+      referenceDateDisplay:_puReferenceDate.toLocaleDateString('en-IN'),
+      rowCount:_puStaged.rows.length,
+      partyCount:Object.keys(_puStaged.computed).length
+    });
+    PAYMENT_DUES=_puStaged.computed;
+    closePaymentUpload();
+    renderPaymentStatus();
+    alert('Payment status updated.');
+  }catch(e){
+    errEl.textContent='Upload failed: '+e.message;
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false; btn.textContent='Confirm & save';
+  }
+}
+
+const PS_STATUS_CLASS={'Not Due':'s-confirmed','Follow-up Due':'s-pending','Overdue 60-90':'s-pending','Overdue 90-120':'s-pending','Critical 120+':'s-new'};
+
+function renderPaymentStatus(){
+  const tbody=document.getElementById('paymentstatus-tbody');
+  if(!PAYMENT_DUES){
+    tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--color-text-secondary);padding:32px">No payment data uploaded yet.</td></tr>';
+    return;
+  }
+  const sf=document.getElementById('ps-status-filter').value;
+  const q=(document.getElementById('ps-search').value||'').toLowerCase();
+  let rows=Object.values(PAYMENT_DUES);
+  if(sf) rows=rows.filter(p=>p.status===sf);
+  if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q)||p.code.includes(q));
+  rows.sort((a,b)=>b.totalDue-a.totalDue);
+
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=rows.map(p=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${p.code}</td>
+      <td style="font-weight:500;max-width:220px">${p.name}${!p.matched?' <span style="color:#b45309;font-size:11px">(unmatched)</span>':''}</td>
+      <td>${p.area||'—'}</td>
+      <td>${p.state||'—'}</td>
+      <td style="font-size:12px;color:${p.soName==='Vacant'?'#b45309':'var(--color-text-secondary)'}">${p.soName}</td>
+      <td style="text-align:right">${p.buckets.current?'₹'+p.buckets.current.toFixed(2):'—'}</td>
+      <td style="text-align:right">${p.buckets['60-90']?'₹'+p.buckets['60-90'].toFixed(2):'—'}</td>
+      <td style="text-align:right">${p.buckets['90-120']?'₹'+p.buckets['90-120'].toFixed(2):'—'}</td>
+      <td style="text-align:right;font-weight:600;color:${p.buckets['120+']?'#dc2626':'inherit'}">${p.buckets['120+']?'₹'+p.buckets['120+'].toFixed(2):'—'}</td>
+      <td style="text-align:right;font-weight:600">₹${p.totalDue.toFixed(2)}</td>
+      <td style="text-align:right;color:#0F6E56">${p.advanceCredit?'₹'+p.advanceCredit.toFixed(2):'—'}</td>
+      <td style="font-size:12px">${p.oldestDueDate||'—'}</td>
+      <td><span class="status-pill ${PS_STATUS_CLASS[p.status]||'s-pending'}">${p.status}</span></td>
+    </tr>`).join('');
+}
+
+function round2(n){ return Math.round((n+Number.EPSILON)*100)/100; }
+
+function exportPaymentStatus(){
+  if(!PAYMENT_DUES){alert('No payment data to export.');return;}
+  const parties=Object.values(PAYMENT_DUES);
+  if(!parties.length){alert('No payment data to export.');return;}
+
+  const masterRows=parties.map(p=>({
+    'Party Code':p.code,'Party Name':p.name,'Area':p.area||'','State':p.state||'','SO Name':p.soName,
+    'Due Amount (Current, 0-60 days)':round2(p.buckets.current),
+    'Due Date (Oldest Unpaid, 30-day terms)':p.oldestDueDate,
+    '60-90 Days':round2(p.buckets['60-90']),'90-120 Days':round2(p.buckets['90-120']),
+    '120+ Days (Critical)':round2(p.buckets['120+']),
+    'Total Due':round2(p.totalDue),'Advance/Credit Balance':round2(p.advanceCredit)
+  }));
+
+  const wb=XLSX.utils.book_new();
+  const wsMaster=XLSX.utils.json_to_sheet(masterRows);
+  wsMaster['!cols']=[{wch:12},{wch:30},{wch:16},{wch:16},{wch:16},{wch:16},{wch:16},{wch:12},{wch:12},{wch:14},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsMaster, 'Ageing Summary');
+
+  const bracketSheets=[
+    {key:'current',name:'30 days',cols:['Party Code','Party Name','Area','State','SO Name','Due Amount (Current, 0-60 days)','Due Date','Total Due']},
+    {key:'60-90',name:'60-90',cols:['Party Code','Party Name','Area','State','SO Name','Due Amount (Current, 0-60 days)','Due Date','60-90 Days','Total Due']},
+    {key:'90-120',name:'90-120',cols:['Party Code','Party Name','Area','State','SO Name','Due Amount (Current, 0-60 days)','Due Date','60-90 Days','90-120 Days','Total Due']},
+    {key:'120+',name:'120+',cols:['Party Code','Party Name','Area','State','SO Name','Due Date','60-90 Days','90-120 Days','120+ Days (Critical)','Total Due']}
+  ];
+  bracketSheets.forEach(sheetDef=>{
+    const inBracket=parties.filter(p=>p.sheetBucket===sheetDef.key);
+    const rows=inBracket.map(p=>{
+      const row={'Party Code':p.code,'Party Name':p.name,'Area':p.area||'','State':p.state||'','SO Name':p.soName};
+      sheetDef.cols.slice(5).forEach(c=>{
+        if(c==='Due Date') row[c]=p.oldestDueDate;
+        else if(c==='Due Amount (Current, 0-60 days)') row[c]=round2(p.buckets.current);
+        else if(c==='60-90 Days') row[c]=round2(p.buckets['60-90']);
+        else if(c==='90-120 Days') row[c]=round2(p.buckets['90-120']);
+        else if(c==="120+ Days (Critical)") row[c]=round2(p.buckets['120+']);
+        else if(c==='Total Due') row[c]=round2(p.totalDue);
+      });
+      return row;
+    });
+    const ws=rows.length?XLSX.utils.json_to_sheet(rows,{header:sheetDef.cols}):XLSX.utils.aoa_to_sheet([sheetDef.cols]);
+    ws['!cols']=sheetDef.cols.map(()=>({wch:16}));
+    XLSX.utils.book_append_sheet(wb, ws, sheetDef.name);
+  });
+
+  XLSX.writeFile(wb, `OTC_Ageing_Summary_${dateStamp()}.xlsx`);
+}
+
 // ===================== EXPORT TO EXCEL =====================
 function dateStamp(){
   return new Date().toISOString().slice(0,10);
 }
 
 function applyHeaderStyle(ws, numCols){
-  // Bold green header row
   for(let c=0;c<numCols;c++){
     const cellRef=XLSX.utils.encode_cell({r:0,c});
     if(!ws[cellRef]) continue;
@@ -2020,10 +2269,6 @@ function applyHeaderStyle(ws, numCols){
 }
 
 // ===================== PER-C&F EXPORT TEMPLATES =====================
-// Every C&F bills off a different sheet layout. To add a new depot's
-// format later: write a build*Export(o) function returning {aoa, styleFn,
-// numCols}, then add one line to CF_EXPORT_BUILDERS below. Any C&F not
-// listed here falls back to buildGenericExport (the original layout).
 const thinBorder={style:'thin',color:{rgb:'B7B7B7'}};
 const fullBorder={top:thinBorder,bottom:thinBorder,left:thinBorder,right:thinBorder};
 
@@ -2031,8 +2276,6 @@ function _cfLookup(store,cf,code){
   return (store&&store[cf]&&store[cf][code]!==undefined)?store[cf][code]:undefined;
 }
 
-// Generic / fallback layout - the original single format, used for any
-// C&F that doesn't have its own template defined yet.
 function buildGenericExport(o){
   const aoa=[
     ['Party / Customer Name', o.customer.name],
@@ -2065,12 +2308,6 @@ function buildGenericExport(o){
   };
 }
 
-// C006 - Jaipur. Row 1 is a single merged "PARTY NAME: <name> (<code>)"
-// cell - Party Code included for quick identification since multiple
-// customers can share similar names. Only rows the customer actually
-// ordered are exported (the original template listed the full catalog for
-// reference, but that made the sheet unusable to just pick up and bill -
-// only punched-quantity rows go out now).
 function buildJaipurExport(o){
   const aoa=[
     [`PARTY NAME: ${o.customer.name} (${o.customer.code})`],
@@ -2098,15 +2335,6 @@ function buildJaipurExport(o){
   };
 }
 
-// C008 - Sonipat. Matches sonipat_CFA_order_sheet.xlsx's "SAPUI" sheet:
-// labels sit in column B with values in merged C:D cells, "Near Expiry
-// Items" labels the Batch/Expiry column pair, and - importantly - their
-// sheet is one row PER BATCH, not per item (a product with 3 batches in
-// stock gets 3 rows, each with that batch's own Stock/B.Stock/Expiry).
-// [decision] The order Qty has no defined split across batches, so the
-// full ordered qty is placed on the nearest-expiry (first) batch row only,
-// leaving Orders blank on that item's other batch rows - flag if picking
-// should instead auto-split oldest-first across batches.
 function buildSonipatExport(o,cf){
   const todayStr=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
   const aoa=[
@@ -2122,10 +2350,6 @@ function buildSonipatExport(o,cf){
   o.items.forEach(item=>{
     const batches=(LIVE_STOCK_BATCHES&&LIVE_STOCK_BATCHES[cf]&&LIVE_STOCK_BATCHES[cf][item.code])||[];
     if(batches.length){
-      // Only the batch the customer actually chose (or selected) goes in the
-      // export - one row per order line, not one row per batch the product
-      // happens to have in stock. Older orders placed before batch selection
-      // existed have no item.batch, so fall back to nearest-expiry (index 0).
       const chosenIdx=item.batch?batches.findIndex(b=>b.batch===item.batch):0;
       const b=batches[chosenIdx===-1?0:chosenIdx];
       aoa.push([
@@ -2135,8 +2359,6 @@ function buildSonipatExport(o,cf){
       ]);
       dataRowCount++;
     } else {
-      // No batch-level data (e.g. last upload was the old wide-pivot format
-      // with no Batch/Expiry column) - fall back to the aggregate qty only.
       const stockQty=_cfLookup(LIVE_STOCK,cf,item.code);
       const blocked=_cfLookup(LIVE_STOCK_BLOCKED,cf,item.code);
       aoa.push([
@@ -2165,10 +2387,10 @@ function buildSonipatExport(o,cf){
 }
 
 const CF_EXPORT_BUILDERS={
-  'C006': buildJaipurExport,   // Jaipur
-  'C008': buildSonipatExport,  // Sonipat
-  'C002': buildJaipurExport,   // Meerut - same format as Jaipur
-  'C003': buildSonipatExport   // Ludhiana - same format as Sonipat
+  'C006': buildJaipurExport,
+  'C008': buildSonipatExport,
+  'C002': buildJaipurExport,
+  'C003': buildSonipatExport
 };
 
 function _applyExportStyles(ws,layout,itemCount){
@@ -2224,9 +2446,6 @@ function _applyExportStyles(ws,layout,itemCount){
   }
 }
 
-// Admin: Export ONE order to its own formatted .xlsx, using the layout
-// registered for that order's C&F (CF_EXPORT_BUILDERS), or the generic
-// layout if that C&F has no template yet.
 function exportSingleOrder(orderId){
   const o=allOrders[orderId];
   if(!o){alert('Order not found.');return;}
@@ -2247,7 +2466,6 @@ function exportSingleOrder(orderId){
   XLSX.writeFile(wb, `${safeName}${safeCode}_${orderSuffix}.xlsx`);
 }
 
-// Admin: Export all orders (respects current filters)
 function exportOrders(){
   const cf=document.getElementById('admin-cust-filter').value;
   const sf=document.getElementById('admin-status-filter').value;
@@ -2257,7 +2475,6 @@ function exportOrders(){
 
   if(!orders.length){alert('No orders to export.');return;}
 
-  // Sheet 1: Order summary
   const summaryData=orders.map(o=>({
     'Order ID': o.id,
     'Date': o.date,
@@ -2272,7 +2489,6 @@ function exportOrders(){
     'Status': o.status
   }));
 
-  // Sheet 2: Order line items (one row per product per order)
   const lineData=[];
   orders.forEach(o=>{
     o.items.forEach(item=>{
@@ -2300,7 +2516,6 @@ function exportOrders(){
   const ws1=XLSX.utils.json_to_sheet(summaryData);
   const ws2=XLSX.utils.json_to_sheet(lineData);
 
-  // Column widths
   ws1['!cols']=[{wch:20},{wch:12},{wch:10},{wch:14},{wch:28},{wch:16},{wch:18},{wch:14},{wch:12},{wch:16},{wch:12}];
   ws2['!cols']=[{wch:20},{wch:12},{wch:28},{wch:16},{wch:12},{wch:14},{wch:34},{wch:8},{wch:12},{wch:10},{wch:10},{wch:10},{wch:10},{wch:14}];
 
@@ -2309,7 +2524,6 @@ function exportOrders(){
   XLSX.writeFile(wb, `PIL_Orders_${dateStamp()}.xlsx`);
 }
 
-// Admin: Export product catalogue (respects current filter)
 function exportProducts(){
   const prods=getFilteredProducts('admin-cat-filter','admin-prod-search');
   if(!prods.length){alert('No products to export.');return;}
@@ -2332,7 +2546,6 @@ function exportProducts(){
   XLSX.writeFile(wb, `PIL_Products_${dateStamp()}.xlsx`);
 }
 
-// Admin: Export customers
 function exportCustomers(){
   const data=CUSTOMERS.map(c=>({
     'Customer Code': c.code,
@@ -2351,7 +2564,6 @@ function exportCustomers(){
   XLSX.writeFile(wb, `PIL_Customers_${dateStamp()}.xlsx`);
 }
 
-// Customer: Export their own order history
 function exportMyOrders(){
   const myOrders=Object.values(allOrders)
     .filter(o=>o.customer&&o.customer.code===currentCustomer.code)
@@ -2436,7 +2648,7 @@ let _deferredInstallPrompt = null;
 
 function _isIOS(){
   return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -2447,7 +2659,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
   });
 });
 
-// iOS never fires beforeinstallprompt - show button immediately with manual instructions instead
 if(_isIOS()){
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#pwa-install-btn, #pwa-install-btn-admin, #pwa-install-btn-login').forEach(btn => {
