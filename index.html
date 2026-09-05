@@ -388,6 +388,19 @@
             <option value="Critical 120+">Critical 120+</option>
           </select>
           <input id="ps-search" placeholder="Search party..." oninput="renderPaymentStatus()" style="padding:6px 10px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;font-family:var(--font-sans);width:180px" />
+          <div style="position:relative">
+            <button class="btn btn-sm" onclick="togglePsCustomerPicker()" id="ps-cust-picker-btn">
+              <i class="ti ti-users"></i> <span id="ps-cust-picker-label">All customers</span> <i class="ti ti-chevron-down"></i>
+            </button>
+            <div id="ps-cust-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:#fff;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);box-shadow:0 8px 24px rgba(0,0,0,0.12);width:280px;max-height:320px;overflow:auto;padding:8px">
+              <input id="ps-cust-picker-search" placeholder="Search..." oninput="renderPsCustomerPicker()" style="width:100%;padding:6px 8px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;font-family:var(--font-sans);margin-bottom:6px" />
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <button class="btn btn-sm" style="flex:1;font-size:11px;padding:4px" onclick="psCustomerPickerSelectAll(true)">Select all</button>
+                <button class="btn btn-sm" style="flex:1;font-size:11px;padding:4px" onclick="psCustomerPickerSelectAll(false)">Clear</button>
+              </div>
+              <div id="ps-cust-picker-list"></div>
+            </div>
+          </div>
           <div style="margin-left:auto;display:flex;gap:8px">
             <button class="btn btn-sm" onclick="requireOwner(openPaymentUpload)"><i class="ti ti-upload"></i> Upload dues file</button>
             <button class="btn btn-excel btn-sm" onclick="exportPaymentStatus()"><i class="ti ti-file-spreadsheet"></i> Export to Excel</button>
@@ -2043,6 +2056,27 @@ function computePaymentDues(rows, referenceDate){
   return result;
 }
 
+// SAP exports commonly write negative amounts as trailing-minus ("50,484-")
+// or parentheses ("(50,484)"), and always with comma thousands separators.
+// JS parseFloat() chokes on all three - it stops at the first comma/dash it
+// hits, so "50,484-" becomes 50 instead of -50484. That silently drops the
+// negative sign off every payment/credit row, which means netting has
+// nothing real to subtract and outstanding balances look like no payment
+// was ever applied. This parser normalizes all three formats before parsing.
+function _psParseAmount(raw){
+  if(typeof raw==='number') return raw;
+  let s=String(raw==null?'':raw).trim();
+  if(!s) return 0;
+  let negative=false;
+  if(/^\(.*\)$/.test(s)){ negative=true; s=s.slice(1,-1); }        // (1,234.56)
+  if(/-\s*$/.test(s)){ negative=true; s=s.replace(/-\s*$/,''); }    // 1,234.56-
+  if(/^-/.test(s)){ negative=true; s=s.replace(/^-/,''); }          // -1,234.56
+  s=s.replace(/[₹$,\s]/g,'');                                       // strip currency symbols + thousands commas
+  const n=parseFloat(s);
+  if(isNaN(n)) return 0;
+  return negative?-n:n;
+}
+
 let _puStaged=null, _puReferenceDate=null;
 
 function openPaymentUpload(){
@@ -2092,7 +2126,7 @@ function handlePaymentFile(evt){
         dueDate:_muFindCol(header,['Net Due Date'])
       };
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
-      const parsed=[]; let skipped=0;
+      const parsed=[]; let skipped=0, suspiciousZero=0;
       for(let r=hIdx+1;r<rows.length;r++){
         const row=rows[r];
         if(!row) continue;
@@ -2100,7 +2134,8 @@ function handlePaymentFile(evt){
         const amtRaw=row[col.amount];
         const dd=row[col.dueDate];
         if(!code || amtRaw===''||amtRaw==null || !dd){ if(code) skipped++; continue; }
-        const amount=parseFloat(amtRaw)||0;
+        const amount=_psParseAmount(amtRaw);
+        if(amount===0 && /\d/.test(String(amtRaw))) suspiciousZero++;
         let dueDate = dd instanceof Date ? dd : new Date(Math.round(((parseFloat(dd)||0)-25569)*86400*1000));
         if(isNaN(dueDate.getTime())){ skipped++; continue; }
         parsed.push({
@@ -2123,6 +2158,7 @@ function handlePaymentFile(evt){
       const critical=parties.filter(p=>p.sheetBucket==='120+').length;
       const lines=[];
       lines.push(`<strong>${parsed.length}</strong> ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file, some values may not be reading correctly.</span>`);
       lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
       lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
       if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) not found in your customer master - kept, SO Name shown as "Vacant": ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
@@ -2167,6 +2203,60 @@ async function confirmPaymentUpload(){
 
 const PS_STATUS_CLASS={'Not Due':'s-confirmed','Follow-up Due':'s-pending','Overdue 60-90':'s-pending','Overdue 90-120':'s-pending','Critical 120+':'s-new'};
 
+// ---- Multi-select customer picker (filters table + scopes export) ----
+// Empty set = "All customers" (nothing excluded). Selecting one or more
+// scopes both the on-screen table and the Excel export to just those
+// parties - useful for pulling dues for a single SO's beat or a handful
+// of accounts to escalate, without exporting the whole book every time.
+let PS_SELECTED_CUSTOMERS=new Set();
+
+function togglePsCustomerPicker(){
+  const el=document.getElementById('ps-cust-picker');
+  const opening=el.style.display==='none';
+  el.style.display=opening?'block':'none';
+  if(opening) renderPsCustomerPicker();
+}
+document.addEventListener('click',(e)=>{
+  const picker=document.getElementById('ps-cust-picker');
+  const btn=document.getElementById('ps-cust-picker-btn');
+  if(!picker||picker.style.display==='none') return;
+  if(!picker.contains(e.target) && !btn.contains(e.target)) picker.style.display='none';
+});
+
+function renderPsCustomerPicker(){
+  const listEl=document.getElementById('ps-cust-picker-list');
+  if(!PAYMENT_DUES){ listEl.innerHTML='<div style="font-size:12px;color:var(--color-text-secondary);padding:8px">No payment data uploaded yet.</div>'; return; }
+  const q=(document.getElementById('ps-cust-picker-search').value||'').toLowerCase();
+  const parties=Object.values(PAYMENT_DUES)
+    .filter(p=>!q||p.name.toLowerCase().includes(q)||p.code.includes(q))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  listEl.innerHTML=parties.map(p=>`
+    <label style="display:flex;align-items:center;gap:6px;padding:4px 2px;font-size:12px;cursor:pointer">
+      <input type="checkbox" ${PS_SELECTED_CUSTOMERS.has(p.code)?'checked':''} onchange="psCustomerPickerToggle('${p.code}',this.checked)" />
+      <span style="flex:1">${p.name}</span>
+      <span style="color:var(--color-text-secondary);font-family:var(--font-mono);font-size:10px">${p.code}</span>
+    </label>`).join('') || '<div style="font-size:12px;color:var(--color-text-secondary);padding:8px">No matches.</div>';
+}
+function psCustomerPickerToggle(code,checked){
+  if(checked) PS_SELECTED_CUSTOMERS.add(code); else PS_SELECTED_CUSTOMERS.delete(code);
+  updatePsPickerLabel();
+  renderPaymentStatus();
+}
+function psCustomerPickerSelectAll(all){
+  if(!PAYMENT_DUES) return;
+  const q=(document.getElementById('ps-cust-picker-search').value||'').toLowerCase();
+  const visible=Object.values(PAYMENT_DUES).filter(p=>!q||p.name.toLowerCase().includes(q)||p.code.includes(q));
+  visible.forEach(p=>{ if(all) PS_SELECTED_CUSTOMERS.add(p.code); else PS_SELECTED_CUSTOMERS.delete(p.code); });
+  renderPsCustomerPicker();
+  updatePsPickerLabel();
+  renderPaymentStatus();
+}
+function updatePsPickerLabel(){
+  const el=document.getElementById('ps-cust-picker-label');
+  const n=PS_SELECTED_CUSTOMERS.size;
+  el.textContent = n===0 ? 'All customers' : (n===1?'1 customer selected':`${n} customers selected`);
+}
+
 function renderPaymentStatus(){
   const tbody=document.getElementById('paymentstatus-tbody');
   if(!PAYMENT_DUES){
@@ -2176,6 +2266,7 @@ function renderPaymentStatus(){
   const sf=document.getElementById('ps-status-filter').value;
   const q=(document.getElementById('ps-search').value||'').toLowerCase();
   let rows=Object.values(PAYMENT_DUES);
+  if(PS_SELECTED_CUSTOMERS.size) rows=rows.filter(p=>PS_SELECTED_CUSTOMERS.has(p.code));
   if(sf) rows=rows.filter(p=>p.status===sf);
   if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q)||p.code.includes(q));
   rows.sort((a,b)=>b.totalDue-a.totalDue);
@@ -2206,8 +2297,9 @@ function round2(n){ return Math.round((n+Number.EPSILON)*100)/100; }
 
 function exportPaymentStatus(){
   if(!PAYMENT_DUES){alert('No payment data to export.');return;}
-  const parties=Object.values(PAYMENT_DUES);
-  if(!parties.length){alert('No payment data to export.');return;}
+  let parties=Object.values(PAYMENT_DUES);
+  if(PS_SELECTED_CUSTOMERS.size) parties=parties.filter(p=>PS_SELECTED_CUSTOMERS.has(p.code));
+  if(!parties.length){alert(PS_SELECTED_CUSTOMERS.size?'No selected customers have an open balance.':'No payment data to export.');return;}
 
   const masterRows=parties.map(p=>({
     'Party Code':p.code,'Party Name':p.name,'Area':p.area||'','State':p.state||'','SO Name':p.soName,
