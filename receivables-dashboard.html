@@ -14,7 +14,7 @@
      different file. Do not treat this file as a security boundary by itself. -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getDatabase, ref, onValue, get, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -32,7 +32,7 @@
   const db = getDatabase(app);
   const auth = getAuth(app);
 
-  window._fb = { db, ref, onValue };
+  window._fb = { db, ref, onValue, get, set };
   window._fbAuth = { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut };
   window.dispatchEvent(new Event("firebase-ready"));
 </script>
@@ -83,6 +83,12 @@
   .filter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
   .wrap { padding: 20px; display: none; }
   select, input.txt { padding: 6px 10px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 13px; font-family: var(--font-sans); }
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center}
+  .modal-overlay.active{display:flex}
+  .modal-box{background:#fff;border-radius:12px;padding:1.5rem;width:520px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,0.18)}
+  .modal-title{font-size:15px;font-weight:600;margin-bottom:14px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .modal-err{font-size:12px;color:#b91c1c;margin-top:8px;display:none}
 </style>
 </head>
 <body>
@@ -123,7 +129,8 @@
         <option value="Critical 120+">Critical 120+</option>
       </select>
       <input class="txt" id="ps-search" placeholder="Search party..." oninput="renderPaymentStatus()" style="width:200px" />
-      <div style="margin-left:auto">
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="openPaymentUpload()"><i class="ti ti-upload"></i> Upload dues file</button>
         <button class="btn btn-excel btn-sm" onclick="exportPaymentStatus()"><i class="ti ti-file-spreadsheet"></i> Export to Excel</button>
       </div>
     </div>
@@ -146,16 +153,90 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="payment-upload-modal">
+  <div class="modal-box">
+    <div class="modal-title">Upload payment dues (raw SAP export)</div>
+    <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">
+      Upload the raw ledger export (Customer, Journal Entry Date, Amount, Net Due Date, City,
+      Customer Name columns — same as your "SAPUI5 Export" sheet). This replaces the previous
+      payment status snapshot; nothing saves until you review the summary and click Confirm.
+    </div>
+    <input type="file" id="pu-file" accept=".xlsx,.xls" onchange="handlePaymentFile(event)" />
+    <div id="pu-summary" style="margin-top:12px;font-size:13px;display:none;background:#f5f5f5;border-radius:8px;padding:10px 12px;max-height:260px;overflow:auto"></div>
+    <div class="modal-err" id="pu-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closePaymentUpload()">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="pu-confirm-btn" onclick="confirmPaymentUpload()" disabled>Confirm &amp; save</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ===================== CUSTOMER MASTER (needed to resolve Area/State/SO
+// Name when computing dues from an upload made on THIS page) =====================
+// Base list copied verbatim from the main portal's index.html. Kept in sync
+// manually — if you add customers via the main portal's master upload, they
+// land in Firebase `customerAdditions` and are picked up automatically below
+// without needing this base array touched.
+const CUSTOMERS=[
+{code:"2000549",name:"TULSI PHARMACEUTICALS ( MUZAFFAR NA",city:"MUZAFFAR NAGAR",state:"UTTAR PRADESH",phone:"",email:""},
+{code:"2002243",name:"MEHAK DISTRIBUTORS",city:"HARIDWAR",state:"UTTARAKHAND",phone:"8630356753",email:"mehakdistributors01@gmail.com"},
+{code:"2002245",name:"FRIENDS DRUG HOUSE",city:"SAHARANPUR",state:"UTTAR PRADESH",phone:"7055515700",email:"jeet2272rana@gmail.com"},
+{code:"2002511",name:"EMM MEDICOSE",city:"YAMUNA NAGAR",state:"HARYANA",phone:"",email:""},
+{code:"2002515",name:"SEEMA MEDICOS",city:"FAZILKA",state:"PUNJAB",phone:"",email:""},
+{code:"2002517",name:"PLATINUM ENTERPRISES",city:"JALANDHAR",state:"PUNJAB",phone:"",email:""},
+{code:"2002520",name:"S.K PHARMA",city:"JAIPUR",state:"RAJASTHAN",phone:"",email:""}
+];
+const CUSTOMER_CF={};
+
+async function loadCustomerAdditions(){
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'customerAdditions'));
+    if(!snap.exists()) return;
+    const additions=snap.val();
+    Object.values(additions).forEach(c=>{
+      if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
+      if(c.cf) CUSTOMER_CF[c.code]=c.cf;
+    });
+  }catch(e){
+    console.error('Could not load added customers',e);
+  }
+}
+async function loadContactOverrides(){
+  const {db,ref,get}=window._fb;
+  try{
+    const snap=await get(ref(db,'customerContacts'));
+    if(!snap.exists()) return;
+    const overrides=snap.val();
+    CUSTOMERS.forEach(c=>{
+      const o=overrides[c.code];
+      if(o){
+        if(o.phone) c.phone=o.phone;
+        if(o.email) c.email=o.email;
+        if(o.name) c.name=o.name;
+        if(o.city) c.city=o.city;
+        if(o.state) c.state=o.state;
+        if(o.soName) c.soName=o.soName;
+        if(o.cf) CUSTOMER_CF[c.code]=o.cf;
+      }
+    });
+  }catch(e){
+    console.error('Could not load saved contact info',e);
+  }
+}
+
 // ===================== AUTH =====================
 window.addEventListener('firebase-ready', () => {
   const { auth, onAuthStateChanged } = window._fbAuth;
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     if (user) {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app-shell').style.display = 'block';
       document.getElementById('ps-wrap').style.display = 'block';
       document.getElementById('whoami').textContent = user.email;
+      await loadCustomerAdditions();
+      await loadContactOverrides();
       subscribePaymentStatus();
     } else {
       document.getElementById('login-screen').style.display = 'flex';
@@ -274,6 +355,243 @@ function exportPaymentStatus() {
   ws['!cols'] = rows.length ? Object.keys(rows[0]).map(() => ({ wch: 16 })) : [];
   XLSX.utils.book_append_sheet(wb, ws, 'Receivables');
   XLSX.writeFile(wb, `PIL_Receivables_${dateStamp()}.xlsx`);
+}
+
+// ===================== UPLOAD (mirrors the main portal's upload logic,
+// including the Journal Entry Date / billing-date capture, so a dues file
+// uploaded from THIS page produces identical results to uploading it from
+// the main portal) =====================
+function _muNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/[^a-z0-9]/g,''); }
+function _muFindCol(headerRow,aliases){
+  const normed=headerRow.map(_muNorm);
+  for(const a of aliases){ const idx=normed.indexOf(_muNorm(a)); if(idx!==-1) return idx; }
+  return -1;
+}
+function _muFindHeaderRow(rows,codeAliases){
+  const normedAliases=codeAliases.map(_muNorm);
+  for(let i=0;i<Math.min(rows.length,8);i++){
+    const row=rows[i]||[];
+    const nonEmpty=row.filter(c=>c!==null&&c!==undefined&&String(c).trim()!=='').length;
+    if(nonEmpty<3) continue;
+    const normed=row.map(_muNorm);
+    if(normedAliases.some(a=>normed.includes(a))) return i;
+  }
+  return -1;
+}
+
+function _psBucketForDaysOverdue(days){
+  if(days>120) return '120+';
+  if(days>90) return '90-120';
+  if(days>60) return '60-90';
+  return 'current';
+}
+function _psStatusLabel(days,bucket){
+  if(days<=30) return 'Not Due';
+  if(bucket==='current') return 'Follow-up Due';
+  if(bucket==='60-90') return 'Overdue 60-90';
+  if(bucket==='90-120') return 'Overdue 90-120';
+  return 'Critical 120+';
+}
+
+function _psParseAmount(raw){
+  if(typeof raw==='number') return raw;
+  let s=String(raw==null?'':raw).trim();
+  if(!s) return 0;
+  let negative=false;
+  if(/^\(.*\)$/.test(s)){ negative=true; s=s.slice(1,-1); }
+  if(/-\s*$/.test(s)){ negative=true; s=s.replace(/-\s*$/,''); }
+  if(/^-/.test(s)){ negative=true; s=s.replace(/^-/,''); }
+  s=s.replace(/[₹$,\s]/g,'');
+  const n=parseFloat(s);
+  if(isNaN(n)) return 0;
+  return negative?-n:n;
+}
+
+function computePaymentDues(rows, referenceDate){
+  const byParty={};
+  rows.forEach(r=>{ if(!byParty[r.code]) byParty[r.code]=[]; byParty[r.code].push(r); });
+
+  const result={};
+  for(const code in byParty){
+    const entries=byParty[code].slice().sort((a,b)=>a.dueDate-b.dueDate);
+    const invoices=entries.filter(e=>e.amount>0).map(e=>({...e,open:e.amount}));
+    let credit=entries.filter(e=>e.amount<0).reduce((s,e)=>s+(-e.amount),0);
+
+    for(const inv of invoices){
+      if(credit<=0) break;
+      const applied=Math.min(credit,inv.open);
+      inv.open-=applied; credit-=applied;
+    }
+    const advanceCredit=credit;
+
+    const buckets={current:0,'60-90':0,'90-120':0,'120+':0};
+    let oldestOpenDueDate=null, oldestOpenDays=null, oldestOpenBillDate=null;
+    invoices.forEach(inv=>{
+      if(inv.open<=0) return;
+      const days=Math.floor((referenceDate-inv.dueDate)/86400000);
+      const bucket=_psBucketForDaysOverdue(days);
+      buckets[bucket]+=inv.open;
+      if(oldestOpenDueDate===null||inv.dueDate<oldestOpenDueDate){ oldestOpenDueDate=inv.dueDate; oldestOpenDays=days; }
+      if(inv.billDate && (oldestOpenBillDate===null||inv.billDate<oldestOpenBillDate)) oldestOpenBillDate=inv.billDate;
+    });
+
+    const totalDue=buckets.current+buckets['60-90']+buckets['90-120']+buckets['120+'];
+    if(totalDue<=0 && advanceCredit<=0) continue;
+
+    const sheetBucket=oldestOpenDueDate===null?null:_psBucketForDaysOverdue(oldestOpenDays);
+    const status=oldestOpenDueDate===null?'Not Due':_psStatusLabel(oldestOpenDays,sheetBucket);
+
+    const cust=CUSTOMERS.find(c=>c.code===code);
+    const anyRow=entries[0];
+    result[code]={
+      code,
+      name: cust?cust.name:anyRow.name,
+      area: cust?cust.city:anyRow.city,
+      state: cust?cust.state:'',
+      soName: cust?(cust.soName||'Vacant'):'Vacant',
+      matched: !!cust,
+      buckets, totalDue, advanceCredit,
+      oldestDueDate: oldestOpenDueDate?oldestOpenDueDate.toLocaleDateString('en-IN'):'',
+      oldestOpenBillDateTs: oldestOpenBillDate?oldestOpenBillDate.getTime():null,
+      oldestOpenBillDateDisplay: oldestOpenBillDate?oldestOpenBillDate.toLocaleDateString('en-IN'):'',
+      sheetBucket, status
+    };
+  }
+  return result;
+}
+
+let _puStaged=null, _puReferenceDate=null;
+
+function openPaymentUpload(){
+  _puStaged=null;
+  document.getElementById('pu-file').value='';
+  document.getElementById('pu-summary').style.display='none';
+  document.getElementById('pu-summary').innerHTML='';
+  document.getElementById('pu-err').style.display='none';
+  document.getElementById('pu-confirm-btn').disabled=true;
+  document.getElementById('payment-upload-modal').classList.add('active');
+}
+function closePaymentUpload(){
+  document.getElementById('payment-upload-modal').classList.remove('active');
+}
+
+function handlePaymentFile(evt){
+  const file=evt.target.files[0];
+  const errEl=document.getElementById('pu-err');
+  const sumEl=document.getElementById('pu-summary');
+  errEl.style.display='none';
+  document.getElementById('pu-confirm-btn').disabled=true;
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      let sheetName=null, hIdx=-1, header=null;
+      for(const name of wb.SheetNames){
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+        const idx=_muFindHeaderRow(rows,['Customer']);
+        if(idx===-1) continue;
+        const h=rows[idx];
+        if(_muFindCol(h,['Amount (CoCode Crcy)','Amount'])!==-1 && _muFindCol(h,['Net Due Date'])!==-1){
+          sheetName=name; hIdx=idx; header=h; break;
+        }
+      }
+      if(!sheetName){
+        errEl.textContent='Could not find a sheet with Customer, Amount and Net Due Date columns.';
+        errEl.style.display='block';
+        return;
+      }
+      const col={
+        code:_muFindCol(header,['Customer']),
+        name:_muFindCol(header,['Customer Name']),
+        city:_muFindCol(header,['City']),
+        amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
+        dueDate:_muFindCol(header,['Net Due Date']),
+        billDate:_muFindCol(header,['Journal Entry Date','Document Date','Posting Date'])
+      };
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
+      const parsed=[]; let skipped=0, suspiciousZero=0;
+      for(let r=hIdx+1;r<rows.length;r++){
+        const row=rows[r];
+        if(!row) continue;
+        const code=String(row[col.code]==null?'':row[col.code]).trim();
+        const amtRaw=row[col.amount];
+        const dd=row[col.dueDate];
+        if(!code || amtRaw===''||amtRaw==null || !dd){ if(code) skipped++; continue; }
+        const amount=_psParseAmount(amtRaw);
+        if(amount===0 && /\d/.test(String(amtRaw))) suspiciousZero++;
+        let dueDate = dd instanceof Date ? dd : new Date(Math.round(((parseFloat(dd)||0)-25569)*86400*1000));
+        if(isNaN(dueDate.getTime())){ skipped++; continue; }
+        let billDate=null;
+        if(col.billDate!==-1){
+          const bd=row[col.billDate];
+          if(bd instanceof Date) billDate=bd;
+          else if(bd) billDate=new Date(Math.round(((parseFloat(bd)||0)-25569)*86400*1000));
+          if(billDate && isNaN(billDate.getTime())) billDate=null;
+        }
+        parsed.push({
+          code, amount, dueDate, billDate,
+          name: col.name!==-1?String(row[col.name]||'').trim():'',
+          city: col.city!==-1?String(row[col.city]||'').trim():''
+        });
+      }
+      if(!parsed.length){
+        errEl.textContent='No usable rows found (need Customer, Amount, Net Due Date on every row).';
+        errEl.style.display='block';
+        return;
+      }
+      _puReferenceDate=new Date();
+      const computed=computePaymentDues(parsed,_puReferenceDate);
+      _puStaged={rows:parsed,computed};
+
+      const parties=Object.values(computed);
+      const unmatched=parties.filter(p=>!p.matched);
+      const critical=parties.filter(p=>p.sheetBucket==='120+').length;
+      const noBillDate=parties.filter(p=>p.totalDue>0 && !p.oldestOpenBillDateTs).length;
+      const lines=[];
+      lines.push(`<strong>${parsed.length}</strong> ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file.</span>`);
+      lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
+      lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
+      if(noBillDate) lines.push(`<span style="color:#b45309"><strong>Warning:</strong> ${noBillDate} part${noBillDate===1?'y has':'ies have'} no billing date found - check the file has a "Journal Entry Date" column, or "Days Since Last Bill" will show "—" for them.</span>`);
+      if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) not found in your customer master - kept, SO Name shown as "Vacant": ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
+      lines.push(`This will replace the current Payment Status snapshot.`);
+      sumEl.innerHTML=lines.join('<br>');
+      sumEl.style.display='block';
+      document.getElementById('pu-confirm-btn').disabled=false;
+    }catch(err){
+      errEl.textContent='Could not read this file: '+err.message;
+      errEl.style.display='block';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmPaymentUpload(){
+  if(!_puStaged) return;
+  const btn=document.getElementById('pu-confirm-btn');
+  const errEl=document.getElementById('pu-err');
+  btn.disabled=true; btn.textContent='Saving...';
+  const {db,ref,set}=window._fb;
+  try{
+    await set(ref(db,'paymentDues'),_puStaged.computed);
+    await set(ref(db,'paymentMeta'),{
+      uploadedAt:Date.now(),
+      uploadedAtDisplay:new Date().toLocaleDateString('en-IN')+' '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
+      referenceDateDisplay:_puReferenceDate.toLocaleDateString('en-IN'),
+      rowCount:_puStaged.rows.length,
+      partyCount:Object.keys(_puStaged.computed).length
+    });
+    PAYMENT_DUES=_puStaged.computed;
+    closePaymentUpload();
+    renderPaymentStatus();
+    alert('Payment status updated.');
+  }catch(e){
+    errEl.textContent='Upload failed: '+e.message;
+    errEl.style.display='block';
+  }finally{
+    btn.disabled=false; btn.textContent='Confirm & save';
+  }
 }
 </script>
 </body>
