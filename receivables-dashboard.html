@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIL Receivables Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+<!-- SAME Firebase project as your main portal — access is restricted by
+     Database Rules (see firebase-database-rules.json), not by this being a
+     different file. Do not treat this file as a security boundary by itself. -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDlpaT_qSsB7AQ-cGYVwGRMMU8TMEfUmN0",
+    authDomain: "pil-order-portal.firebaseapp.com",
+    databaseURL: "https://pil-order-portal-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "pil-order-portal",
+    storageBucket: "pil-order-portal.firebasestorage.app",
+    messagingSenderId: "578127995175",
+    appId: "1:578127995175:web:522fc71d8db3f7355a4902",
+    measurementId: "G-5SGNH02GDS"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+
+  window._fb = { db, ref, onValue };
+  window._fbAuth = { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+  window.dispatchEvent(new Event("firebase-ready"));
+</script>
+
+<style>
+  :root {
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-mono: 'Courier New', monospace;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #6b7280;
+    --color-text-danger: #dc2626;
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f9fafb;
+    --border-radius-md: 8px;
+    --color-border-primary: #d1d5db;
+    --color-border-secondary: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-sans); color: var(--color-text-primary); background: var(--color-background-secondary); }
+  .btn { padding: 7px 12px; border-radius: var(--border-radius-md); border: 1px solid var(--color-border-primary); background: #fff; font-family: var(--font-sans); font-size: 13px; cursor: pointer; }
+  .btn:hover { background: #f5f5f5; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-primary { background: #1D9E75; color: #fff; border-color: #1D9E75; }
+  .btn-primary:hover { background: #0F6E56; border-color: #0F6E56; }
+  .btn-excel { background: #f0fdf7; color: #0F6E56; border-color: #a7f3d0; display: inline-flex; align-items: center; gap: 5px; }
+  .btn-excel:hover { background: #dcfce7; }
+  .card { background: #fff; border: 1px solid var(--color-border-secondary); border-radius: 12px; padding: 16px; }
+  .page-title { font-size: 18px; font-weight: 600; margin: 0 0 14px; display: flex; align-items: baseline; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--color-border-secondary); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--color-text-secondary); background: var(--color-background-secondary); position: sticky; top: 0; }
+  .status-pill { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+  .s-pending { background: #FAEEDA; color: #854F0B; }
+  .s-confirmed { background: #E1F5EE; color: #085041; }
+  .s-new { background: #EEEDFE; color: #3C3489; }
+  .days-cell { font-weight: 600; }
+  .days-ok { color: #085041; }
+  .days-warn { color: #854F0B; }
+  .days-critical { color: #dc2626; }
+  .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .login-box { background: #fff; border: 1px solid var(--color-border-secondary); border-radius: 12px; padding: 28px; width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+  .login-box h1 { font-size: 16px; margin: 0 0 4px; }
+  .login-box p { font-size: 12px; color: var(--color-text-secondary); margin: 0 0 18px; }
+  .login-box label { font-size: 12px; color: var(--color-text-secondary); display: block; margin: 10px 0 4px; }
+  .login-box input { width: 100%; padding: 8px 10px; border: 1px solid var(--color-border-primary); border-radius: var(--border-radius-md); font-family: var(--font-sans); font-size: 13px; }
+  .login-err { font-size: 12px; color: var(--color-text-danger); margin-top: 8px; display: none; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; background: #fff; border-bottom: 1px solid var(--color-border-secondary); }
+  .filter-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .wrap { padding: 20px; display: none; }
+  select, input.txt { padding: 6px 10px; border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 13px; font-family: var(--font-sans); }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <h1>PIL Receivables Dashboard</h1>
+    <p>Restricted access — sign in with your assigned account.</p>
+    <label>Email</label>
+    <input id="li-email" placeholder="you@pilindia.in" />
+    <label>Password</label>
+    <input id="li-pw" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div class="login-err" id="li-err"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="doLogin()">Sign in</button>
+  </div>
+</div>
+
+<div id="app-shell" style="display:none">
+  <div class="topbar">
+    <div style="font-weight:600">PIL Receivables Dashboard</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:12px;color:var(--color-text-secondary)" id="whoami"></span>
+      <button class="btn btn-sm" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="wrap" id="ps-wrap">
+    <div class="page-title">Payment status
+      <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="paymentstatus-updated"></span>
+    </div>
+    <div class="filter-row">
+      <select id="ps-status-filter" onchange="renderPaymentStatus()">
+        <option value="">All statuses</option>
+        <option value="Not Due">Not Due</option>
+        <option value="Follow-up Due">Follow-up Due (30-60 days)</option>
+        <option value="Overdue 60-90">Overdue 60-90</option>
+        <option value="Overdue 90-120">Overdue 90-120</option>
+        <option value="Critical 120+">Critical 120+</option>
+      </select>
+      <input class="txt" id="ps-search" placeholder="Search party..." oninput="renderPaymentStatus()" style="width:200px" />
+      <div style="margin-left:auto">
+        <button class="btn btn-excel btn-sm" onclick="exportPaymentStatus()"><i class="ti ti-file-spreadsheet"></i> Export to Excel</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto;max-height:75vh">
+        <table>
+          <thead><tr>
+            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>SO Name</th>
+            <th style="text-align:right">Current (0-60)</th><th style="text-align:right">60-90</th>
+            <th style="text-align:right">90-120</th><th style="text-align:right">120+ (Critical)</th>
+            <th style="text-align:right">Total Due</th><th style="text-align:right">Advance/Credit</th>
+            <th>Oldest Due Date</th>
+            <th>Days Since Last Bill</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody id="paymentstatus-tbody"><tr><td colspan="14" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== AUTH =====================
+window.addEventListener('firebase-ready', () => {
+  const { auth, onAuthStateChanged } = window._fbAuth;
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-shell').style.display = 'block';
+      document.getElementById('ps-wrap').style.display = 'block';
+      document.getElementById('whoami').textContent = user.email;
+      subscribePaymentStatus();
+    } else {
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('app-shell').style.display = 'none';
+    }
+  });
+});
+
+function doLogin() {
+  const email = document.getElementById('li-email').value.trim();
+  const pw = document.getElementById('li-pw').value;
+  const errEl = document.getElementById('li-err');
+  errEl.style.display = 'none';
+  const { auth, signInWithEmailAndPassword } = window._fbAuth;
+  signInWithEmailAndPassword(auth, email, pw).catch((e) => {
+    errEl.textContent = 'Sign in failed — check email and password.';
+    errEl.style.display = 'block';
+  });
+}
+function doLogout() {
+  const { auth, signOut } = window._fbAuth;
+  signOut(auth);
+}
+
+// ===================== PAYMENT STATUS =====================
+let PAYMENT_DUES = null, PAYMENT_META = null;
+
+function subscribePaymentStatus() {
+  const { db, ref, onValue } = window._fb;
+  onValue(ref(db, 'paymentDues'), (snap) => { PAYMENT_DUES = snap.val() || null; renderPaymentStatus(); });
+  onValue(ref(db, 'paymentMeta'), (snap) => {
+    PAYMENT_META = snap.val() || null;
+    const el = document.getElementById('paymentstatus-updated');
+    if (el) el.textContent = PAYMENT_META ? ('· Last updated ' + PAYMENT_META.uploadedAtDisplay + ' (as of ' + PAYMENT_META.referenceDateDisplay + ')') : '· No upload yet';
+  });
+}
+
+const PS_STATUS_CLASS = { 'Not Due': 's-confirmed', 'Follow-up Due': 's-pending', 'Overdue 60-90': 's-pending', 'Overdue 90-120': 's-pending', 'Critical 120+': 's-new' };
+
+// Days-since-billed is intentionally NOT read from a stored field — it is
+// recomputed against the current moment on every render, per the brief:
+// "days must be calculated when someone views the data." Only the raw
+// timestamp of the oldest still-open invoice's billing date is stored.
+function daysSinceBilled(p) {
+  if (!p.oldestOpenBillDateTs) return null;
+  return Math.floor((Date.now() - p.oldestOpenBillDateTs) / 86400000);
+}
+function daysClass(days) {
+  if (days === null) return '';
+  if (days > 90) return 'days-critical';
+  if (days > 60) return 'days-warn';
+  return 'days-ok';
+}
+
+function renderPaymentStatus() {
+  const tbody = document.getElementById('paymentstatus-tbody');
+  if (!PAYMENT_DUES) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--color-text-secondary);padding:32px">No payment data uploaded yet.</td></tr>';
+    return;
+  }
+  const sf = document.getElementById('ps-status-filter').value;
+  const q = (document.getElementById('ps-search').value || '').toLowerCase();
+  let rows = Object.values(PAYMENT_DUES);
+  if (sf) rows = rows.filter(p => p.status === sf);
+  if (q) rows = rows.filter(p => p.name.toLowerCase().includes(q) || p.code.includes(q));
+  rows.sort((a, b) => b.totalDue - a.totalDue);
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(p => {
+    const days = daysSinceBilled(p);
+    return `
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${p.code}</td>
+      <td style="font-weight:500;max-width:220px">${p.name}${!p.matched ? ' <span style="color:#b45309;font-size:11px">(unmatched)</span>' : ''}</td>
+      <td>${p.area || '—'}</td>
+      <td>${p.state || '—'}</td>
+      <td style="font-size:12px;color:${p.soName === 'Vacant' ? '#b45309' : 'var(--color-text-secondary)'}">${p.soName}</td>
+      <td style="text-align:right">${p.buckets.current ? '₹' + p.buckets.current.toFixed(2) : '—'}</td>
+      <td style="text-align:right">${p.buckets['60-90'] ? '₹' + p.buckets['60-90'].toFixed(2) : '—'}</td>
+      <td style="text-align:right">${p.buckets['90-120'] ? '₹' + p.buckets['90-120'].toFixed(2) : '—'}</td>
+      <td style="text-align:right;font-weight:600;color:${p.buckets['120+'] ? '#dc2626' : 'inherit'}">${p.buckets['120+'] ? '₹' + p.buckets['120+'].toFixed(2) : '—'}</td>
+      <td style="text-align:right;font-weight:600">₹${p.totalDue.toFixed(2)}</td>
+      <td style="text-align:right;color:#0F6E56">${p.advanceCredit ? '₹' + p.advanceCredit.toFixed(2) : '—'}</td>
+      <td style="font-size:12px">${p.oldestDueDate || '—'}</td>
+      <td class="days-cell ${daysClass(days)}">${days === null ? '—' : days + ' days'}${p.oldestOpenBillDateDisplay ? `<div style="font-size:10px;font-weight:400;color:var(--color-text-secondary)">since ${p.oldestOpenBillDateDisplay}</div>` : ''}</td>
+      <td><span class="status-pill ${PS_STATUS_CLASS[p.status] || 's-pending'}">${p.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+function dateStamp() { return new Date().toISOString().slice(0, 10); }
+
+function exportPaymentStatus() {
+  if (!PAYMENT_DUES) { alert('No payment data to export.'); return; }
+  const parties = Object.values(PAYMENT_DUES);
+  if (!parties.length) { alert('No payment data to export.'); return; }
+
+  const rows = parties.map(p => ({
+    'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'State': p.state || '', 'SO Name': p.soName,
+    'Due Amount (Current, 0-60 days)': round2(p.buckets.current),
+    '60-90 Days': round2(p.buckets['60-90']), '90-120 Days': round2(p.buckets['90-120']),
+    '120+ Days (Critical)': round2(p.buckets['120+']),
+    'Total Due': round2(p.totalDue), 'Advance/Credit Balance': round2(p.advanceCredit),
+    'Oldest Due Date': p.oldestDueDate || '',
+    'Days Since Last Bill': daysSinceBilled(p) === null ? '' : daysSinceBilled(p),
+    'Last Bill Date': p.oldestOpenBillDateDisplay || '',
+    'Status': p.status
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = rows.length ? Object.keys(rows[0]).map(() => ({ wch: 16 })) : [];
+  XLSX.utils.book_append_sheet(wb, ws, 'Receivables');
+  XLSX.writeFile(wb, `PIL_Receivables_${dateStamp()}.xlsx`);
+}
+</script>
+</body>
+</html>
