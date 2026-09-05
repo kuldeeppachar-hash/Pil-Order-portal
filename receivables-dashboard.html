@@ -120,6 +120,9 @@
       <span style="font-size:13px;color:var(--color-text-secondary);font-weight:400" id="paymentstatus-updated"></span>
     </div>
     <div class="filter-row">
+      <select id="ps-division-filter" onchange="renderPaymentStatus()">
+        <option value="">All divisions</option>
+      </select>
       <select id="ps-status-filter" onchange="renderPaymentStatus()">
         <option value="">All statuses</option>
         <option value="Not Due">Not Due</option>
@@ -128,7 +131,7 @@
         <option value="Overdue 90-120">Overdue 90-120</option>
         <option value="Critical 120+">Critical 120+</option>
       </select>
-      <input class="txt" id="ps-search" placeholder="Search party..." oninput="renderPaymentStatus()" style="width:200px" />
+      <input class="txt" id="ps-search" placeholder="Search party by name or code..." oninput="renderPaymentStatus()" style="width:220px" />
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn btn-sm" onclick="openPaymentUpload()"><i class="ti ti-upload"></i> Upload dues file</button>
         <button class="btn btn-excel btn-sm" onclick="exportPaymentStatus()"><i class="ti ti-file-spreadsheet"></i> Export to Excel</button>
@@ -138,15 +141,15 @@
       <div style="overflow-x:auto;max-height:75vh">
         <table>
           <thead><tr>
-            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>SO Name</th>
-            <th style="text-align:right">Current (0-60)</th><th style="text-align:right">60-90</th>
+            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>Division</th>
+            <th style="text-align:right">0-30</th><th style="text-align:right">30-60</th><th style="text-align:right">60-90</th>
             <th style="text-align:right">90-120</th><th style="text-align:right">120+ (Critical)</th>
             <th style="text-align:right">Total Due</th><th style="text-align:right">Advance/Credit</th>
             <th>Oldest Due Date</th>
             <th>Days Since Last Bill</th>
             <th>Status</th>
           </tr></thead>
-          <tbody id="paymentstatus-tbody"><tr><td colspan="14" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
+          <tbody id="paymentstatus-tbody"><tr><td colspan="15" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -157,8 +160,9 @@
   <div class="modal-box">
     <div class="modal-title">Upload payment dues (raw SAP export)</div>
     <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">
-      Upload the raw ledger export (Customer, Journal Entry Date, Amount, Net Due Date, City,
-      Customer Name columns — same as your "SAPUI5 Export" sheet). This replaces the previous
+      Upload the raw ledger export (Customer, Customer Name, Division, City, State,
+      Amount, Net Due Date, Journal Entry Date/Invoice Date columns — same as your
+      "SAPUI5 Export" sheet). This replaces the previous
       payment status snapshot; nothing saves until you review the summary and click Confirm.
     </div>
     <input type="file" id="pu-file" accept=".xlsx,.xls" onchange="handlePaymentFile(event)" />
@@ -172,59 +176,11 @@
 </div>
 
 <script>
-// ===================== CUSTOMER MASTER (needed to resolve Area/State/SO
-// Name when computing dues from an upload made on THIS page) =====================
-// Base list copied verbatim from the main portal's index.html. Kept in sync
-// manually — if you add customers via the main portal's master upload, they
-// land in Firebase `customerAdditions` and are picked up automatically below
-// without needing this base array touched.
-const CUSTOMERS=[
-{code:"2000549",name:"TULSI PHARMACEUTICALS ( MUZAFFAR NA",city:"MUZAFFAR NAGAR",state:"UTTAR PRADESH",phone:"",email:""},
-{code:"2002243",name:"MEHAK DISTRIBUTORS",city:"HARIDWAR",state:"UTTARAKHAND",phone:"8630356753",email:"mehakdistributors01@gmail.com"},
-{code:"2002245",name:"FRIENDS DRUG HOUSE",city:"SAHARANPUR",state:"UTTAR PRADESH",phone:"7055515700",email:"jeet2272rana@gmail.com"},
-{code:"2002511",name:"EMM MEDICOSE",city:"YAMUNA NAGAR",state:"HARYANA",phone:"",email:""},
-{code:"2002515",name:"SEEMA MEDICOS",city:"FAZILKA",state:"PUNJAB",phone:"",email:""},
-{code:"2002517",name:"PLATINUM ENTERPRISES",city:"JALANDHAR",state:"PUNJAB",phone:"",email:""},
-{code:"2002520",name:"S.K PHARMA",city:"JAIPUR",state:"RAJASTHAN",phone:"",email:""}
-];
-const CUSTOMER_CF={};
-
-async function loadCustomerAdditions(){
-  const {db,ref,get}=window._fb;
-  try{
-    const snap=await get(ref(db,'customerAdditions'));
-    if(!snap.exists()) return;
-    const additions=snap.val();
-    Object.values(additions).forEach(c=>{
-      if(!CUSTOMERS.find(x=>x.code===c.code)) CUSTOMERS.push(c);
-      if(c.cf) CUSTOMER_CF[c.code]=c.cf;
-    });
-  }catch(e){
-    console.error('Could not load added customers',e);
-  }
-}
-async function loadContactOverrides(){
-  const {db,ref,get}=window._fb;
-  try{
-    const snap=await get(ref(db,'customerContacts'));
-    if(!snap.exists()) return;
-    const overrides=snap.val();
-    CUSTOMERS.forEach(c=>{
-      const o=overrides[c.code];
-      if(o){
-        if(o.phone) c.phone=o.phone;
-        if(o.email) c.email=o.email;
-        if(o.name) c.name=o.name;
-        if(o.city) c.city=o.city;
-        if(o.state) c.state=o.state;
-        if(o.soName) c.soName=o.soName;
-        if(o.cf) CUSTOMER_CF[c.code]=o.cf;
-      }
-    });
-  }catch(e){
-    console.error('Could not load saved contact info',e);
-  }
-}
+// ===================== DIVISION NAMES =====================
+// Known division names in the business (used to pre-populate the filter
+// dropdown). Any new division value found in an uploaded dues file is added
+// to the dropdown automatically at render time even if it isn't in this list.
+const KNOWN_DIVISIONS=["AHCD","C.Care (Anaesthesia)","Cross Division","Generic","OTC","PIL Ethical"];
 
 // ===================== AUTH =====================
 window.addEventListener('firebase-ready', () => {
@@ -235,8 +191,7 @@ window.addEventListener('firebase-ready', () => {
       document.getElementById('app-shell').style.display = 'block';
       document.getElementById('ps-wrap').style.display = 'block';
       document.getElementById('whoami').textContent = user.email;
-      await loadCustomerAdditions();
-      await loadContactOverrides();
+      populateDivisionFilter();
       subscribePaymentStatus();
     } else {
       document.getElementById('login-screen').style.display = 'flex';
@@ -261,12 +216,38 @@ function doLogout() {
   signOut(auth);
 }
 
+function populateDivisionFilter(){
+  const sel=document.getElementById('ps-division-filter');
+  const opts=KNOWN_DIVISIONS.slice().sort();
+  opts.forEach(d=>{
+    const o=document.createElement('option');
+    o.value=d; o.textContent=d;
+    sel.appendChild(o);
+  });
+  const unk=document.createElement('option');
+  unk.value='Unknown'; unk.textContent='Unknown';
+  sel.appendChild(unk);
+}
+function ensureDivisionOptions(dues){
+  if(!dues) return;
+  const sel=document.getElementById('ps-division-filter');
+  const existing=new Set(Array.from(sel.options).map(o=>o.value));
+  const found=new Set(Object.values(dues).map(p=>p.division).filter(Boolean));
+  found.forEach(d=>{
+    if(!existing.has(d)){
+      const o=document.createElement('option');
+      o.value=d; o.textContent=d;
+      sel.appendChild(o);
+    }
+  });
+}
+
 // ===================== PAYMENT STATUS =====================
 let PAYMENT_DUES = null, PAYMENT_META = null;
 
 function subscribePaymentStatus() {
   const { db, ref, onValue } = window._fb;
-  onValue(ref(db, 'paymentDues'), (snap) => { PAYMENT_DUES = snap.val() || null; renderPaymentStatus(); });
+  onValue(ref(db, 'paymentDues'), (snap) => { PAYMENT_DUES = snap.val() || null; ensureDivisionOptions(PAYMENT_DUES); renderPaymentStatus(); });
   onValue(ref(db, 'paymentMeta'), (snap) => {
     PAYMENT_META = snap.val() || null;
     const el = document.getElementById('paymentstatus-updated');
@@ -298,14 +279,16 @@ function renderPaymentStatus() {
     return;
   }
   const sf = document.getElementById('ps-status-filter').value;
+  const df = document.getElementById('ps-division-filter').value;
   const q = (document.getElementById('ps-search').value || '').toLowerCase();
   let rows = Object.values(PAYMENT_DUES);
   if (sf) rows = rows.filter(p => p.status === sf);
-  if (q) rows = rows.filter(p => p.name.toLowerCase().includes(q) || p.code.includes(q));
+  if (df) rows = rows.filter(p => p.division === df);
+  if (q) rows = rows.filter(p => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
   rows.sort((a, b) => b.totalDue - a.totalDue);
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(p => {
@@ -316,8 +299,9 @@ function renderPaymentStatus() {
       <td style="font-weight:500;max-width:220px">${p.name}${!p.matched ? ' <span style="color:#b45309;font-size:11px">(unmatched)</span>' : ''}</td>
       <td>${p.area || '—'}</td>
       <td>${p.state || '—'}</td>
-      <td style="font-size:12px;color:${p.soName === 'Vacant' ? '#b45309' : 'var(--color-text-secondary)'}">${p.soName}</td>
-      <td style="text-align:right">${p.buckets.current ? '₹' + p.buckets.current.toFixed(2) : '—'}</td>
+      <td style="font-size:12px;color:${p.division === 'Unknown' ? '#b45309' : 'var(--color-text-secondary)'}">${p.division}</td>
+      <td style="text-align:right">${p.buckets['0-30'] ? '₹' + p.buckets['0-30'].toFixed(2) : '—'}</td>
+      <td style="text-align:right">${p.buckets['30-60'] ? '₹' + p.buckets['30-60'].toFixed(2) : '—'}</td>
       <td style="text-align:right">${p.buckets['60-90'] ? '₹' + p.buckets['60-90'].toFixed(2) : '—'}</td>
       <td style="text-align:right">${p.buckets['90-120'] ? '₹' + p.buckets['90-120'].toFixed(2) : '—'}</td>
       <td style="text-align:right;font-weight:600;color:${p.buckets['120+'] ? '#dc2626' : 'inherit'}">${p.buckets['120+'] ? '₹' + p.buckets['120+'].toFixed(2) : '—'}</td>
@@ -339,8 +323,8 @@ function exportPaymentStatus() {
   if (!parties.length) { alert('No payment data to export.'); return; }
 
   const rows = parties.map(p => ({
-    'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'State': p.state || '', 'SO Name': p.soName,
-    'Due Amount (Current, 0-60 days)': round2(p.buckets.current),
+    'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'State': p.state || '', 'Division': p.division,
+    '0-30 Days': round2(p.buckets['0-30']), '30-60 Days': round2(p.buckets['30-60']),
     '60-90 Days': round2(p.buckets['60-90']), '90-120 Days': round2(p.buckets['90-120']),
     '120+ Days (Critical)': round2(p.buckets['120+']),
     'Total Due': round2(p.totalDue), 'Advance/Credit Balance': round2(p.advanceCredit),
@@ -365,6 +349,15 @@ function _muNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/[
 function _muFindCol(headerRow,aliases){
   const normed=headerRow.map(_muNorm);
   for(const a of aliases){ const idx=normed.indexOf(_muNorm(a)); if(idx!==-1) return idx; }
+  // Fallback: substring match — only when the actual header CONTAINS the
+  // full alias text (e.g. "Division Name (New)" contains "Division Name").
+  // Deliberately one-directional: matching the other way round would let a
+  // short header like "Customer" wrongly satisfy the alias "Customer Name".
+  for(const a of aliases){
+    const na=_muNorm(a);
+    const idx=normed.findIndex(h=>h.length>=na.length && h.includes(na));
+    if(idx!==-1) return idx;
+  }
   return -1;
 }
 function _muFindHeaderRow(rows,codeAliases){
@@ -383,11 +376,12 @@ function _psBucketForDaysOverdue(days){
   if(days>120) return '120+';
   if(days>90) return '90-120';
   if(days>60) return '60-90';
-  return 'current';
+  if(days>30) return '30-60';
+  return '0-30';
 }
 function _psStatusLabel(days,bucket){
   if(days<=30) return 'Not Due';
-  if(bucket==='current') return 'Follow-up Due';
+  if(bucket==='30-60') return 'Follow-up Due';
   if(bucket==='60-90') return 'Overdue 60-90';
   if(bucket==='90-120') return 'Overdue 90-120';
   return 'Critical 120+';
@@ -424,7 +418,7 @@ function computePaymentDues(rows, referenceDate){
     }
     const advanceCredit=credit;
 
-    const buckets={current:0,'60-90':0,'90-120':0,'120+':0};
+    const buckets={'0-30':0,'30-60':0,'60-90':0,'90-120':0,'120+':0};
     let oldestOpenDueDate=null, oldestOpenDays=null, oldestOpenBillDate=null;
     invoices.forEach(inv=>{
       if(inv.open<=0) return;
@@ -435,21 +429,31 @@ function computePaymentDues(rows, referenceDate){
       if(inv.billDate && (oldestOpenBillDate===null||inv.billDate<oldestOpenBillDate)) oldestOpenBillDate=inv.billDate;
     });
 
-    const totalDue=buckets.current+buckets['60-90']+buckets['90-120']+buckets['120+'];
+    const totalDue=buckets['0-30']+buckets['30-60']+buckets['60-90']+buckets['90-120']+buckets['120+'];
     if(totalDue<=0 && advanceCredit<=0) continue;
 
     const sheetBucket=oldestOpenDueDate===null?null:_psBucketForDaysOverdue(oldestOpenDays);
     const status=oldestOpenDueDate===null?'Not Due':_psStatusLabel(oldestOpenDays,sheetBucket);
 
-    const cust=CUSTOMERS.find(c=>c.code===code);
-    const anyRow=entries[0];
+    // Division, name, area/state all come straight off this party's own rows
+    // in the uploaded file — no separate customer master. If a party's rows
+    // carry more than one division value (rare — e.g. a stock-transfer code),
+    // the most frequent one wins; codes with no division on any row show
+    // "Unknown" rather than a guess.
+    const divCounts={};
+    entries.forEach(e=>{ if(e.division) divCounts[e.division]=(divCounts[e.division]||0)+1; });
+    let division='Unknown', topCount=0;
+    for(const d in divCounts){ if(divCounts[d]>topCount){ division=d; topCount=divCounts[d]; } }
+
+    const anyRow=entries.find(e=>e.name)||entries[0];
+    const anyStateRow=entries.find(e=>e.state)||entries[0];
     result[code]={
       code,
-      name: cust?cust.name:anyRow.name,
-      area: cust?cust.city:anyRow.city,
-      state: cust?cust.state:'',
-      soName: cust?(cust.soName||'Vacant'):'Vacant',
-      matched: !!cust,
+      name: anyRow.name||code,
+      area: anyRow.city||'',
+      state: anyStateRow.state||'',
+      division,
+      matched: !!anyRow.name,
       buckets, totalDue, advanceCredit,
       oldestDueDate: oldestOpenDueDate?oldestOpenDueDate.toLocaleDateString('en-IN'):'',
       oldestOpenBillDateTs: oldestOpenBillDate?oldestOpenBillDate.getTime():null,
@@ -503,11 +507,13 @@ function handlePaymentFile(evt){
       }
       const col={
         code:_muFindCol(header,['Customer']),
-        name:_muFindCol(header,['Customer Name']),
+        name:_muFindCol(header,['Customer Name','Party Name']),
         city:_muFindCol(header,['City']),
+        state:_muFindCol(header,['State']),
+        division:_muFindCol(header,['Division Name','Division']),
         amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
         dueDate:_muFindCol(header,['Net Due Date']),
-        billDate:_muFindCol(header,['Journal Entry Date','Document Date','Posting Date'])
+        billDate:_muFindCol(header,['Journal Entry Date','Invoice Date','Document Date','Posting Date','Bill Date'])
       };
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
       const parsed=[]; let skipped=0, suspiciousZero=0;
@@ -532,7 +538,9 @@ function handlePaymentFile(evt){
         parsed.push({
           code, amount, dueDate, billDate,
           name: col.name!==-1?String(row[col.name]||'').trim():'',
-          city: col.city!==-1?String(row[col.city]||'').trim():''
+          city: col.city!==-1?String(row[col.city]||'').trim():'',
+          state: col.state!==-1?String(row[col.state]||'').trim():'',
+          division: col.division!==-1?String(row[col.division]||'').trim():''
         });
       }
       if(!parsed.length){
@@ -553,8 +561,10 @@ function handlePaymentFile(evt){
       if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file.</span>`);
       lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
       lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
-      if(noBillDate) lines.push(`<span style="color:#b45309"><strong>Warning:</strong> ${noBillDate} part${noBillDate===1?'y has':'ies have'} no billing date found - check the file has a "Journal Entry Date" column, or "Days Since Last Bill" will show "—" for them.</span>`);
-      if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) not found in your customer master - kept, SO Name shown as "Vacant": ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
+      if(noBillDate) lines.push(`<span style="color:#b45309"><strong>Warning:</strong> ${noBillDate} part${noBillDate===1?'y has':'ies have'} no billing date found - check the file has a "Journal Entry Date" / "Invoice Date" column, or "Days Since Last Bill" will show "—" for them.</span>`);
+      if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) had no Customer Name on any row - shown by code only: ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
+      const noDivision=parties.filter(p=>p.division==='Unknown').length;
+      if(noDivision) lines.push(`<span style="color:#b45309">${noDivision} part${noDivision===1?'y has':'ies have'} no Division value on any row - shown as "Unknown". Check this file has a Division column.</span>`);
       lines.push(`This will replace the current Payment Status snapshot.`);
       sumEl.innerHTML=lines.join('<br>');
       sumEl.style.display='block';
