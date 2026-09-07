@@ -148,7 +148,7 @@
       <div style="overflow-x:auto;max-height:75vh">
         <table>
           <thead><tr>
-            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>Division</th><th>CFA / Business Place</th>
+            <th>Party Code</th><th>Party Name</th><th>Area</th><th>Division</th><th>CFA / Business Place</th>
             <th style="text-align:right">0-30</th><th style="text-align:right">30-60</th><th style="text-align:right">60-90</th>
             <th style="text-align:right">90-120</th><th style="text-align:right">120+ (Critical)</th>
             <th style="text-align:right">Total Due</th><th style="text-align:right">Advance/Credit</th>
@@ -156,7 +156,7 @@
             <th>Days Since Last Bill</th>
             <th>Status</th>
           </tr></thead>
-          <tbody id="paymentstatus-tbody"><tr><td colspan="16" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
+          <tbody id="paymentstatus-tbody"><tr><td colspan="15" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -167,10 +167,11 @@
   <div class="modal-box">
     <div class="modal-title">Upload payment dues (raw SAP export)</div>
     <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">
-      Upload the raw ledger export (Customer, Customer Name, City, State, Business Place,
+      Upload the raw ledger export (Customer, Customer Name, City, Business Place,
       Amount, Net Due Date, Journal Entry Date/Invoice Date columns — same as your
       "SAPUI5 Export" sheet). Division is looked up from the OTC/Generic master files by
-      party code, not read from this file. This replaces the previous
+      party code, not read from this file. Only rows with Business Place C001-C012 are
+      counted. This replaces the previous
       payment status snapshot; nothing saves until you review the summary and click Confirm.
     </div>
     <input type="file" id="pu-file" accept=".xlsx,.xls" onchange="handlePaymentFile(event)" />
@@ -270,6 +271,16 @@ function formatBusinessPlace(code){
   const c=String(code).trim().toUpperCase();
   const name=BUSINESS_PLACE_NAMES[c];
   return name ? c+' ('+name+')' : c;
+}
+// Valid business places are C001 through C012 only — anything else on a raw
+// dues row is treated as an internal/inter-system entry, not a real party
+// due, and that row is dropped entirely during upload (see handlePaymentFile).
+function isValidBusinessPlace(code){
+  const c=String(code).trim().toUpperCase().replace(/\s+/g,'');
+  const m=c.match(/^C0*(\d{1,3})$/);
+  if(!m) return false;
+  const n=parseInt(m[1],10);
+  return n>=1 && n<=12;
 }
 
 
@@ -379,7 +390,7 @@ function renderPaymentStatus() {
   rows.sort((a, b) => b.totalDue - a.totalDue);
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(p => {
@@ -389,7 +400,6 @@ function renderPaymentStatus() {
       <td style="font-family:var(--font-mono);font-size:12px">${p.code}</td>
       <td style="font-weight:500;max-width:260px;white-space:normal;overflow-wrap:break-word;word-break:break-word;line-height:1.35">${p.name}${!p.matched ? ' <span style="color:#b45309;font-size:11px">(unmatched)</span>' : ''}</td>
       <td>${p.area || '—'}</td>
-      <td>${p.state || '—'}</td>
       <td style="font-size:12px;color:${p.division === 'Unknown' ? '#b45309' : 'var(--color-text-secondary)'}">${p.division}</td>
       <td style="font-size:12px;color:${p.businessPlace ? 'var(--color-text-secondary)' : '#b45309'}">${p.businessPlace || 'Unknown'}</td>
       <td style="text-align:right">${p.buckets['0-30'] ? '₹' + p.buckets['0-30'].toFixed(2) : '—'}</td>
@@ -415,7 +425,7 @@ function exportPaymentStatus() {
   if (!parties.length) { alert('No payment data to export.'); return; }
 
   const rows = parties.map(p => ({
-    'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'State': p.state || '', 'Division': p.division,
+    'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'Division': p.division,
     'CFA / Business Place': p.businessPlace || 'Unknown',
     '0-30 Days': round2(p.buckets['0-30']), '30-60 Days': round2(p.buckets['30-60']),
     '60-90 Days': round2(p.buckets['60-90']), '90-120 Days': round2(p.buckets['90-120']),
@@ -551,12 +561,10 @@ function computePaymentDues(rows, referenceDate){
     for(const b in bpCounts){ if(bpCounts[b]>bpTop){ businessPlace=b; bpTop=bpCounts[b]; } }
 
     const anyRow=entries.find(e=>e.name)||entries[0];
-    const anyStateRow=entries.find(e=>e.state)||entries[0];
     result[code]={
       code,
       name: anyRow.name||code,
       area: anyRow.city||'',
-      state: anyStateRow.state||'',
       division,
       businessPlace: formatBusinessPlace(businessPlace),
       matched: !!anyRow.name,
@@ -615,7 +623,6 @@ function handlePaymentFile(evt){
         code:_muFindCol(header,['Customer']),
         name:_muFindCol(header,['Customer Name','Party Name']),
         city:_muFindCol(header,['City']),
-        state:_muFindCol(header,['State']),
         division:_muFindCol(header,['Division Name','Division']),
         businessPlace:_muFindCol(header,['Business Place','CFA','C&F Code','C & F Code']),
         amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
@@ -623,7 +630,7 @@ function handlePaymentFile(evt){
         billDate:_muFindCol(header,['Journal Entry Date','Invoice Date','Document Date','Posting Date','Bill Date'])
       };
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
-      const parsed=[]; let skipped=0, suspiciousZero=0;
+      const parsed=[]; let skipped=0, suspiciousZero=0, outOfRangeBP=0;
       for(let r=hIdx+1;r<rows.length;r++){
         const row=rows[r];
         if(!row) continue;
@@ -631,6 +638,11 @@ function handlePaymentFile(evt){
         const amtRaw=row[col.amount];
         const dd=row[col.dueDate];
         if(!code || amtRaw===''||amtRaw==null || !dd){ if(code) skipped++; continue; }
+        // Only C001-C012 are real PIL business places; anything else on this
+        // row is treated as an internal/inter-system entry and ignored
+        // entirely (not counted toward any party's dues).
+        const rawBP = col.businessPlace!==-1?String(row[col.businessPlace]||'').trim():'';
+        if(rawBP && !isValidBusinessPlace(rawBP)){ outOfRangeBP++; continue; }
         const amount=_psParseAmount(amtRaw);
         if(amount===0 && /\d/.test(String(amtRaw))) suspiciousZero++;
         let dueDate = dd instanceof Date ? dd : new Date(Math.round(((parseFloat(dd)||0)-25569)*86400*1000));
@@ -646,9 +658,8 @@ function handlePaymentFile(evt){
           code, amount, dueDate, billDate,
           name: col.name!==-1?String(row[col.name]||'').trim():'',
           city: col.city!==-1?String(row[col.city]||'').trim():'',
-          state: col.state!==-1?String(row[col.state]||'').trim():'',
           division: col.division!==-1?String(row[col.division]||'').trim():'',
-          businessPlace: col.businessPlace!==-1?String(row[col.businessPlace]||'').trim():''
+          businessPlace: rawBP
         });
       }
       if(!parsed.length){
@@ -666,6 +677,7 @@ function handlePaymentFile(evt){
       const noBillDate=parties.filter(p=>p.totalDue>0 && !p.oldestOpenBillDateTs).length;
       const lines=[];
       lines.push(`<strong>${parsed.length}</strong> ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      if(outOfRangeBP) lines.push(`<span style="color:var(--color-text-secondary)">${outOfRangeBP} row(s) ignored - Business Place code outside C001-C012 (treated as an inter-system/internal entry, not a party due).</span>`);
       if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file.</span>`);
       lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
       lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
