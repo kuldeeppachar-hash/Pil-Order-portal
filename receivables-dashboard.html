@@ -364,7 +364,7 @@ function renderPaymentStatus() {
     return `
     <tr>
       <td style="font-family:var(--font-mono);font-size:12px">${p.code}</td>
-      <td style="font-weight:500;max-width:220px">${p.name}${!p.matched ? ' <span style="color:#b45309;font-size:11px">(unmatched)</span>' : ''}</td>
+      <td style="font-weight:500;max-width:260px;white-space:normal;overflow-wrap:break-word;word-break:break-word;line-height:1.35">${p.name}${!p.matched ? ' <span style="color:#b45309;font-size:11px">(unmatched)</span>' : ''}</td>
       <td>${p.area || '—'}</td>
       <td>${p.state || '—'}</td>
       <td style="font-size:12px;color:${p.division === 'Unknown' ? '#b45309' : 'var(--color-text-secondary)'}">${p.division}</td>
