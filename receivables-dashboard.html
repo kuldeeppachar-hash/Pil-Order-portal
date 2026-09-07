@@ -315,8 +315,8 @@ let PAYMENT_DUES = null, PAYMENT_META = null;
 
 function subscribePaymentStatus() {
   const { db, ref, onValue } = window._fb;
-  onValue(ref(db, 'paymentDues'), (snap) => { PAYMENT_DUES = snap.val() || null; ensureDivisionOptions(PAYMENT_DUES); renderPaymentStatus(); });
-  onValue(ref(db, 'paymentMeta'), (snap) => {
+  onValue(ref(db, 'receivablesAllDivisions/paymentDues'), (snap) => { PAYMENT_DUES = snap.val() || null; ensureDivisionOptions(PAYMENT_DUES); renderPaymentStatus(); });
+  onValue(ref(db, 'receivablesAllDivisions/paymentMeta'), (snap) => {
     PAYMENT_META = snap.val() || null;
     const el = document.getElementById('paymentstatus-updated');
     if (el) el.textContent = PAYMENT_META ? ('· Last updated ' + PAYMENT_META.uploadedAtDisplay + ' (as of ' + PAYMENT_META.referenceDateDisplay + ')') : '· No upload yet';
@@ -652,8 +652,8 @@ async function confirmPaymentUpload(){
   btn.disabled=true; btn.textContent='Saving...';
   const {db,ref,set}=window._fb;
   try{
-    await set(ref(db,'paymentDues'),_puStaged.computed);
-    await set(ref(db,'paymentMeta'),{
+    await set(ref(db,'receivablesAllDivisions/paymentDues'),_puStaged.computed);
+    await set(ref(db,'receivablesAllDivisions/paymentMeta'),{
       uploadedAt:Date.now(),
       uploadedAtDisplay:new Date().toLocaleDateString('en-IN')+' '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}),
       referenceDateDisplay:_puReferenceDate.toLocaleDateString('en-IN'),
