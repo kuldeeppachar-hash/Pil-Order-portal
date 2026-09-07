@@ -148,7 +148,7 @@
       <div style="overflow-x:auto;max-height:75vh">
         <table>
           <thead><tr>
-            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>Division</th>
+            <th>Party Code</th><th>Party Name</th><th>Area</th><th>State</th><th>Division</th><th>CFA / Business Place</th>
             <th style="text-align:right">0-30</th><th style="text-align:right">30-60</th><th style="text-align:right">60-90</th>
             <th style="text-align:right">90-120</th><th style="text-align:right">120+ (Critical)</th>
             <th style="text-align:right">Total Due</th><th style="text-align:right">Advance/Credit</th>
@@ -156,7 +156,7 @@
             <th>Days Since Last Bill</th>
             <th>Status</th>
           </tr></thead>
-          <tbody id="paymentstatus-tbody"><tr><td colspan="15" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
+          <tbody id="paymentstatus-tbody"><tr><td colspan="16" style="text-align:center;padding:24px;color:var(--color-text-secondary)">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -167,9 +167,10 @@
   <div class="modal-box">
     <div class="modal-title">Upload payment dues (raw SAP export)</div>
     <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">
-      Upload the raw ledger export (Customer, Customer Name, Division, City, State,
+      Upload the raw ledger export (Customer, Customer Name, City, State, Business Place,
       Amount, Net Due Date, Journal Entry Date/Invoice Date columns — same as your
-      "SAPUI5 Export" sheet). This replaces the previous
+      "SAPUI5 Export" sheet). Division is looked up from the OTC/Generic master files by
+      party code, not read from this file. This replaces the previous
       payment status snapshot; nothing saves until you review the summary and click Confirm.
     </div>
     <input type="file" id="pu-file" accept=".xlsx,.xls" onchange="handlePaymentFile(event)" />
@@ -249,6 +250,28 @@ if (_isIOS && !_isStandalone) {
 // dropdown). Any new division value found in an uploaded dues file is added
 // to the dropdown automatically at render time even if it isn't in this list.
 const KNOWN_DIVISIONS=["AHCD","C.Care (Anaesthesia)","Cross Division","Generic","OTC","PIL Ethical"];
+
+// Party Code -> Division, built from the OTC and Generic master files
+// (each master's own party list is the source of truth for who belongs to
+// that division). A handful of codes (currently 4) are genuinely listed in
+// both masters and are shown as e.g. "OTC, Generic" rather than picked
+// arbitrarily. Codes not in either master fall back to Unknown, or to
+// whatever the raw upload's own Division column says if it has one.
+const PARTY_DIVISION_MASTER={"2002588":"OTC","2002385":"OTC","2002487":"OTC","2002366":"OTC","2002493":"OTC","2002274":"OTC","2002420":"OTC","2002416":"OTC","2002441":"OTC","2002396":"OTC","2002492":"OTC","2002415":"OTC","2002475":"OTC","2002606":"OTC","2002619":"OTC","2002613":"OTC","2002520":"OTC","2002450":"OTC","2002316":"OTC","2002510":"OTC","2002624":"OTC","2002589":"OTC","2002347":"OTC","2002243":"OTC","2002309":"OTC","2002548":"OTC","2002405":"OTC","2002246":"OTC","2002518":"OTC","2002307":"OTC","2002244":"OTC","2002614":"OTC","2002633":"OTC","2002404":"OTC","2002327":"OTC","2002318":"OTC","2002476":"OTC","2002341":"OTC","2002356":"OTC","2002348":"OTC","2002368":"OTC","2002597":"OTC","2002584":"OTC","2002306":"OTC","2002528":"OTC","2002456":"OTC","2002324":"OTC","2002639":"OTC","2002335":"OTC","2002298":"OTC","2002564":"OTC, Generic","2002349":"OTC","2002488":"OTC","2002486":"OTC","2002380":"OTC","2002513":"OTC","2002338":"OTC","2002591":"OTC","2002437":"OTC","2002538":"OTC","2002509":"OTC","2002615":"OTC","2002258":"OTC","2002562":"OTC","2002515":"OTC","2002550":"OTC","2002567":"OTC","2002344":"OTC","2002620":"OTC","2002381":"OTC","2002525":"OTC","2002339":"OTC","2002484":"OTC, Generic","2002592":"OTC","2002357":"OTC","2002479":"OTC","2002336":"OTC","2002365":"OTC","2002245":"OTC","2002511":"OTC","2002618":"OTC","2002586":"OTC","2002284":"OTC","2002556":"OTC","2002637":"OTC, Generic","2002477":"OTC","2002247":"OTC","2002257":"OTC","2002498":"OTC","2002340":"OTC","2002451":"OTC","2002367":"OTC","2002482":"OTC","2002382":"OTC","2002531":"OTC","2002497":"OTC","2002334":"OTC","2002551":"OTC","2002280":"OTC","2002386":"OTC","2002281":"OTC","2002282":"OTC","2002314":"OTC","2002337":"OTC","2000549":"OTC","2002549":"OTC","2002631":"OTC","2002269":"OTC","2002312":"OTC","2002302":"OTC","2002491":"OTC","2002565":"OTC","2002270":"OTC","2002587":"OTC","2002478":"OTC","2002529":"OTC","2002607":"OTC","2002295":"OTC","2002470":"OTC","2002630":"OTC, Generic","2002480":"OTC","2002517":"OTC","2002566":"OTC","2002512":"OTC","2002276":"OTC","2000684":"Generic","2001309":"Generic","2000204":"Generic","2002305":"Generic","2001683":"Generic","2001618":"Generic","2001819":"Generic","2001300":"Generic","2001620":"Generic","2001447":"Generic","2000310":"Generic","2001609":"Generic","2002169":"Generic","2002149":"Generic","2001874":"Generic","2000347":"Generic","2001542":"Generic","2001822":"Generic","2001599":"Generic","2002474":"Generic","2001598":"Generic","2001478":"Generic","2002343":"Generic","2001545":"Generic","2002028":"Generic","2002527":"Generic","2000232":"Generic","2001337":"Generic","2001351":"Generic","2001634":"Generic","2001800":"Generic","2000820":"Generic","2001490":"Generic","2001628":"Generic","2000817":"Generic","2000275":"Generic","2001363":"Generic","2001832":"Generic","2001410":"Generic","2000328":"Generic","2001303":"Generic","2002466":"Generic","2000332":"Generic","2001954":"Generic","2002068":"Generic","2000583":"Generic","2001782":"Generic","2000683":"Generic","2001153":"Generic","2000196":"Generic","2001383":"Generic","2001204":"Generic","2001457":"Generic","2001550":"Generic","2001347":"Generic","2002360":"Generic","2000417":"Generic","2001661":"Generic","2002443":"Generic","2000242":"Generic","2002378":"Generic","2000516":"Generic","2001587":"Generic","2000492":"Generic","2002581":"Generic","2001343":"Generic","2001507":"Generic","2001835":"Generic","2001419":"Generic","2001641":"Generic","2001960":"Generic","2002537":"Generic","2000882":"Generic","2000349":"Generic","2000807":"Generic","2001284":"Generic","2001820":"Generic","2001930":"Generic","2001909":"Generic","2002071":"Generic","2001592":"Generic","2001401":"Generic","2000416":"Generic","2000449":"Generic","2001657":"Generic","2001448":"Generic","2001703":"Generic","2001824":"Generic","2002052":"Generic","2001663":"Generic","2000362":"Generic","2001699":"Generic","2001775":"Generic","2000301":"Generic","2000605":"Generic","2001732":"Generic","2000455":"Generic","2000382":"Generic","2001984":"Generic","2000357":"Generic","2000303":"Generic","2002209":"Generic","2000457":"Generic","2000194":"Generic","2000522":"Generic","2000796":"Generic","2000622":"Generic","2001771":"Generic","2001797":"Generic","2000746":"Generic","2000192":"Generic","2001701":"Generic","2001716":"Generic","2001944":"Generic","2001691":"Generic","2000390":"Generic","2000400":"Generic","2000352":"Generic","2000289":"Generic","2000724":"Generic","2000751":"Generic","2001605":"Generic","2000615":"Generic","2000813":"Generic","2000696":"Generic","2001416":"Generic","2001422":"Generic","2001636":"Generic","2002106":"Generic","2001812":"Generic","2001614":"Generic","2001736":"Generic","2002166":"Generic","2001501":"Generic","2001947":"Generic","2002392":"Generic","2000302":"Generic","2000767":"Generic","2001489":"Generic","2001656":"Generic","2002256":"Generic","2002387":"Generic","2000945":"Generic","2002379":"Generic","2001925":"Generic","2000495":"Generic","2001811":"Generic","2000452":"Generic","2001667":"Generic","2002131":"Generic","2001305":"Generic","2001715":"Generic","2001769":"Generic","2000264":"Generic","2001591":"Generic","2000358":"Generic","2001957":"Generic","2002626":"Generic","2001437":"Generic","2001837":"Generic","2002098":"Generic","2000427":"Generic","2002217":"Generic","2000493":"Generic","2000731":"Generic","2001389":"Generic","2000646":"Generic","2001362":"Generic","2001392":"Generic","2001458":"Generic","2001570":"Generic","2000468":"Generic","2001287":"Generic","2000414":"Generic","2000268":"Generic","2001739":"Generic","2002593":"Generic","2000822":"Generic","2000307":"Generic","2001388":"Generic","2002599":"Generic","2000339":"Generic","2002023":"Generic","2000420":"Generic","2000361":"Generic","2000215":"Generic","2001979":"Generic","2000418":"Generic","2001323":"Generic","2001450":"Generic","2001993":"Generic","2001749":"Generic","2001899":"Generic","2001833":"Generic","2001694":"Generic","2000252":"Generic","2001738":"Generic","2001608":"Generic","2001314":"Generic","2001370":"Generic","2000278":"Generic","2001409":"Generic","2000211":"Generic","2000531":"Generic","2000866":"Generic","2000800":"Generic","2000916":"Generic","2002223":"Generic","2000490":"Generic","2000659":"Generic","2001569":"Generic","2000745":"Generic","2000227":"Generic","2000325":"Generic","2000380":"Generic","2001652":"Generic","2001564":"Generic","2002255":"Generic","2002342":"Generic","2001359":"Generic","2002406":"Generic","2000610":"Generic","2000199":"Generic","2001905":"Generic","2000621":"Generic","2002079":"Generic","2000509":"Generic","2001302":"Generic","2001311":"Generic","2001891":"Generic","2002083":"Generic","2002389":"Generic","2000761":"Generic","2000483":"Generic","2001413":"Generic","2001705":"Generic","2000406":"Generic","2001863":"Generic","2000797":"Generic","2001322":"Generic","2001865":"Generic","2001919":"Generic","2000421":"Generic","2000246":"Generic","2002417":"Generic","2000381":"Generic","2002063":"Generic","2000198":"Generic","2000644":"Generic","2001382":"Generic","2001635":"Generic","2002625":"Generic","2001330":"Generic","2001567":"Generic","2002206":"Generic","2001325":"Generic","2000781":"Generic","2002045":"Generic","2001339":"Generic","2001918":"Generic","2002600":"Generic","2001679":"Generic","2000443":"Generic","2002219":"Generic","2000827":"Generic","2001554":"Generic","2001673":"Generic","2000201":"Generic","2000365":"Generic","2000756":"Generic","2001642":"Generic","2000691":"Generic","2001711":"Generic","2002608":"Generic","2000532":"Generic","2002014":"Generic","2000300":"Generic","2001298":"Generic","2001308":"Generic","2001452":"Generic","2001585":"Generic","2000465":"Generic","2001324":"Generic","2000474":"Generic","2001584":"Generic","2001704":"Generic","2002095":"Generic","2000508":"Generic","2000250":"Generic","2001680":"Generic","2001399":"Generic","2001785":"Generic","2000857":"Generic","2000811":"Generic","2000430":"Generic","2000758":"Generic","2000851":"Generic","2000749":"Generic","2000297":"Generic","2001571":"Generic","2001690":"Generic","2002073":"Generic","2001381":"Generic","2001396":"Generic","2001839":"Generic","2000045":"Generic","2001575":"Generic","2001823":"Generic","2001983":"Generic","2002449":"Generic","2000491":"Generic","2000688":"Generic","2002355":"Generic","2000222":"Generic","2000434":"Generic","2001719":"Generic","2001781":"Generic","2002467":"Generic","2000212":"Generic","2001289":"Generic","2000694":"Generic","2000779":"Generic","2001336":"Generic","2001594":"Generic","2001747":"Generic","2000816":"Generic","2001994":"Generic","2000223":"Generic","2000740":"Generic","2000473":"Generic","2001734":"Generic","2000265":"Generic","2001619":"Generic","2002539":"Generic","2000523":"Generic","2000706":"Generic","2000329":"Generic","2001658":"Generic","2001826":"Generic","2001912":"Generic","2000489":"Generic","2001361":"Generic","2001595":"Generic","2000560":"Generic","2002426":"Generic","2000367":"Generic","2000673":"Generic","2001335":"Generic","2001229":"Generic","2000782":"Generic","2001527":"Generic","2000309":"Generic","2000494":"Generic","2000237":"Generic","2000345":"Generic","2001743":"Generic","2000750":"Generic","2001600":"Generic","2001968":"Generic","2000785":"Generic","2000757":"Generic","2001379":"Generic","2000247":"Generic","2001544":"Generic","2001846":"Generic","2001319":"Generic","2000271":"Generic","2001692":"Generic","2001565":"Generic","2001872":"Generic","2000425":"Generic","2001562":"Generic","2001742":"Generic","2000249":"Generic","2000444":"Generic","2000484":"Generic","2000243":"Generic","2001681":"Generic","2000295":"Generic","2001981":"Generic","2000283":"Generic","2001264":"Generic","2001990":"Generic","2000206":"Generic","2000874":"Generic","2000618":"Generic","2000479":"Generic","2000707":"Generic","2001249":"Generic","2002332":"Generic","2001386":"Generic","2000870":"Generic","2000826":"Generic","2001568":"Generic","2001395":"Generic","2002464":"Generic","2001349":"Generic","2001825":"Generic","2001926":"Generic","2000412":"Generic","2001385":"Generic","2001015":"Generic","2002224":"Generic","2001423":"Generic","2000214":"Generic","2001724":"Generic","2000520":"Generic","2001780":"Generic","2000324":"Generic","2000763":"Generic","2001290":"Generic","2001299":"Generic","2000486":"Generic","2000715":"Generic","2001647":"Generic","2000501":"Generic","2001378":"Generic","2001817":"Generic","2001638":"Generic","2001942":"Generic","2000320":"Generic","2000456":"Generic","2001329":"Generic","2002375":"Generic","2000809":"Generic","2001380":"Generic","2002345":"Generic","2000780":"Generic","2000742":"Generic","2000314":"Generic","2002229":"Generic","2000762":"Generic","2001725":"Generic","2001285":"Generic","2001597":"Generic","2002130":"Generic","2001682":"Generic","2001588":"Generic","2001707":"Generic","2000770":"Generic","2001332":"Generic","2001756":"Generic","2001374":"Generic","2001750":"Generic","2000343":"Generic","2001394":"Generic","2001580":"Generic","2000195":"Generic","2000552":"Generic","2000305":"Generic","2000771":"Generic","2001411":"Generic","2000392":"Generic","2000524":"Generic","2000766":"Generic","2001689":"Generic","2001674":"Generic","2001400":"Generic","2001342":"Generic","2000374":"Generic","2002604":"Generic","2001293":"Generic","2001513":"Generic","2000280":"Generic","2001676":"Generic","2000228":"Generic","2000282":"Generic","2000304":"Generic","2002210":"Generic","2002490":"Generic","2000470":"Generic","2000814":"Generic","2001354":"Generic","2000462":"Generic","2001643":"Generic","2001875":"Generic","2002168":"Generic","2000611":"Generic","2001407":"Generic","2000529":"Generic","2000934":"Generic","2001368":"Generic","2001328":"Generic","2000834":"Generic","2001230":"Generic","2001982":"Generic","2001404":"Generic","2001539":"Generic","2002311":"Generic","2000248":"Generic","2001446":"Generic","2000239":"Generic","2001695":"Generic","2002346":"Generic","2000276":"Generic","2001952":"Generic","2001864":"Generic","2002105":"Generic","2001666":"Generic","2000450":"Generic","2002129":"Generic","2001315":"Generic","2002612":"Generic","2001733":"Generic","2000259":"Generic","2000267":"Generic","2001556":"Generic","2000812":"Generic","2001662":"Generic","2002383":"Generic","2001664":"Generic","2001425":"Generic","2001577":"Generic","2001862":"Generic","2000411":"Generic","2001900":"Generic","2002021":"Generic","2000941":"Generic","2000475":"Generic","2001405":"Generic","2000557":"Generic","2000191":"Generic","2000635":"Generic","2002448":"Generic","2001134":"Generic","2002503":"Generic","2001098":"Generic","2001467":"Generic","2001593":"Generic","2001384":"Generic","2000197":"Generic","2001712":"Generic","2001986":"Generic","2000720":"Generic","2002640":"Generic","2000497":"Generic","2000461":"Generic","2000207":"Generic","2001708":"Generic","2000498":"Generic","2000472":"Generic","2001818":"Generic","2000738":"Generic","2001538":"Generic","2001970":"Generic","2001341":"Generic","2002211":"Generic","2001804":"Generic","2001789":"Generic","2000261":"Generic","2002037":"Generic","2002465":"Generic","2001016":"Generic","2000331":"Generic","2002575":"Generic","2001283":"Generic","2000299":"Generic","2000413":"Generic","2001291":"Generic","2001364":"Generic","2001387":"Generic","2001616":"Generic","2000277":"Generic","2000254":"Generic","2002532":"Generic","2000256":"Generic","2001786":"Generic","2002078":"Generic","2000753":"Generic","2001770":"Generic","2001645":"Generic","2001333":"Generic","2000469":"Generic","2000460":"Generic","2002582":"Generic","2001633":"Generic","2001286":"Generic","2000253":"Generic","2001774":"Generic","2000193":"Generic","2001557":"Generic","2001916":"Generic","2001296":"Generic","2000793":"Generic","2001346":"Generic","2000189":"Generic","2001625":"Generic","2001985":"Generic","2001558":"Generic","2001958":"Generic","2000760":"Generic","2001870":"Generic","2000775":"Generic","2002362":"Generic","2001659":"Generic","2001071":"Generic","2001934":"Generic","2001306":"Generic","2001650":"Generic","2001802":"Generic","2000848":"Generic","2000656":"Generic","2002026":"Generic","2001415":"Generic","2001953":"Generic","2002583":"Generic","2001358":"Generic","2000502":"Generic","2001317":"Generic","2000787":"Generic","2000794":"Generic","2002140":"Generic","2002623":"Generic","2001621":"Generic","2001678":"Generic","2001435":"Generic","2001549":"Generic","2000799":"Generic","2001726":"Generic","2002481":"Generic","2001476":"Generic","2001427":"Generic","2001665":"Generic","2001746":"Generic","2001777":"Generic","2000739":"Generic","2002530":"Generic","2001693":"Generic","2001927":"Generic","2000315":"Generic","2000608":"Generic","2001340":"Generic","2000323":"Generic","2000815":"Generic","2001590":"Generic","2000802":"Generic","2000334":"Generic","2001202":"Generic","2002526":"Generic","2001307":"Generic","2001438":"Generic","2002170":"Generic","2001421":"Generic","2002458":"Generic","2002208":"Generic","2000326":"Generic","2000778":"Generic","2000685":"Generic","2001759":"Generic","2001632":"Generic","2001372":"Generic","2001573":"Generic","2002435":"Generic","2000226":"Generic","2000401":"Generic","2000306":"Generic","2001788":"Generic","2000451":"Generic","2002158":"Generic","2002627":"Generic","2000429":"Generic","2001869":"Generic","2000844":"Generic","2001959":"Generic","2000402":"Generic","2002067":"Generic","2002062":"Generic","2002388":"Generic","2000515":"Generic","2000368":"Generic","2001871":"Generic","2001710":"Generic","2002390":"Generic","2000768":"Generic","2001417":"Generic","2001717":"Generic","2002159":"Generic","2000708":"Generic","2000737":"Generic","2000209":"Generic","2000776":"Generic","2001391":"Generic","2001294":"Generic","2002410":"Generic","2000818":"Generic","2001320":"Generic","2001348":"Generic","2001366":"Generic","2000686":"Generic","2001677":"Generic","2000445":"Generic","2002121":"Generic","2001313":"Generic","2000500":"Generic","2000272":"Generic","2001566":"Generic","2001295":"Generic","2002421":"Generic","2001923":"Generic","2001617":"Generic","2001778":"Generic","2000482":"Generic","2001744":"Generic","2001779":"Generic","2000556":"Generic","2001428":"Generic","2001159":"Generic","2001449":"Generic","2001603":"Generic","2001610":"Generic","2001740":"Generic","2001784":"Generic","2001429":"Generic","2000662":"Generic","2000754":"Generic","2002263":"Generic","2000833":"Generic","2000371":"Generic","2001653":"Generic","2001546":"Generic","2001745":"Generic","2002110":"Generic","2002162":"Generic","2001992":"Generic","2001697":"Generic","2002122":"Generic","2002180":"Generic","2000372":"Generic","2001606":"Generic","2001644":"Generic","2000623":"Generic","2001321":"Generic","2001552":"Generic","2002128":"Generic","2000843":"Generic","2002547":"Generic","2000792":"Generic","2002097":"Generic","2001356":"Generic","2001615":"Generic","2001686":"Generic","2001688":"Generic","2001301":"Generic","2001161":"Generic","2002010":"Generic","2000849":"Generic","2000463":"Generic","2000266":"Generic","2001702":"Generic","2000682":"Generic","2001654":"Generic","2000823":"Generic","2000748":"Generic","2002563":"Generic","2000238":"Generic","2001431":"Generic","2000296":"Generic","2001737":"Generic","2001751":"Generic","2001709":"Generic","2001961":"Generic","2000559":"Generic","2001998":"Generic","2001741":"Generic","2000269":"Generic","2000789":"Generic","2001806":"Generic","2001921":"Generic","2001338":"Generic","2002489":"Generic","2000391":"Generic","2000376":"Generic","2001801":"Generic","2001796":"Generic","2002108":"Generic","2000342":"Generic","2000383":"Generic","2001639":"Generic","2000428":"Generic","2001434":"Generic","2001841":"Generic","2002398":"Generic","2002545":"Generic","2002254":"Generic","2001436":"Generic","2000744":"Generic","2000604":"Generic","2001367":"Generic","2001418":"Generic","2000518":"Generic","2001836":"Generic","2000354":"Generic","2001773":"Generic","2000330":"Generic"};
+
+// Business Place / CFA code -> location name, merged from both masters'
+// C & F sheets (Generic's sheet embeds the code inside a free-text
+// Head-Quarter field like "C&F C002 (UP)" - parsed out on the Python side
+// when this table was generated; re-derive it the same way if you refresh
+// this from newer master files).
+const BUSINESS_PLACE_NAMES={"C001":"Jammu","C002":"Meerut","C003":"Ludhiana","C006":"Jaipur","C007":"Indore","C008":"Sonipat","C009":"Raipur","C010":"Patna","C011":"Ahmedabad","C012":"Dera Bassi (Sas Nagar)"};
+function formatBusinessPlace(code){
+  if(!code) return '';
+  const c=String(code).trim().toUpperCase();
+  const name=BUSINESS_PLACE_NAMES[c];
+  return name ? c+' ('+name+')' : c;
+}
+
 
 // ===================== AUTH =====================
 window.addEventListener('firebase-ready', () => {
@@ -356,7 +379,7 @@ function renderPaymentStatus() {
   rows.sort((a, b) => b.totalDue - a.totalDue);
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:var(--color-text-secondary);padding:24px">No parties match.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(p => {
@@ -368,6 +391,7 @@ function renderPaymentStatus() {
       <td>${p.area || '—'}</td>
       <td>${p.state || '—'}</td>
       <td style="font-size:12px;color:${p.division === 'Unknown' ? '#b45309' : 'var(--color-text-secondary)'}">${p.division}</td>
+      <td style="font-size:12px;color:${p.businessPlace ? 'var(--color-text-secondary)' : '#b45309'}">${p.businessPlace || 'Unknown'}</td>
       <td style="text-align:right">${p.buckets['0-30'] ? '₹' + p.buckets['0-30'].toFixed(2) : '—'}</td>
       <td style="text-align:right">${p.buckets['30-60'] ? '₹' + p.buckets['30-60'].toFixed(2) : '—'}</td>
       <td style="text-align:right">${p.buckets['60-90'] ? '₹' + p.buckets['60-90'].toFixed(2) : '—'}</td>
@@ -392,6 +416,7 @@ function exportPaymentStatus() {
 
   const rows = parties.map(p => ({
     'Party Code': p.code, 'Party Name': p.name, 'Area': p.area || '', 'State': p.state || '', 'Division': p.division,
+    'CFA / Business Place': p.businessPlace || 'Unknown',
     '0-30 Days': round2(p.buckets['0-30']), '30-60 Days': round2(p.buckets['30-60']),
     '60-90 Days': round2(p.buckets['60-90']), '90-120 Days': round2(p.buckets['90-120']),
     '120+ Days (Critical)': round2(p.buckets['120+']),
@@ -503,15 +528,27 @@ function computePaymentDues(rows, referenceDate){
     const sheetBucket=oldestOpenDueDate===null?null:_psBucketForDaysOverdue(oldestOpenDays);
     const status=oldestOpenDueDate===null?'Not Due':_psStatusLabel(oldestOpenDays,sheetBucket);
 
-    // Division, name, area/state all come straight off this party's own rows
-    // in the uploaded file — no separate customer master. If a party's rows
-    // carry more than one division value (rare — e.g. a stock-transfer code),
-    // the most frequent one wins; codes with no division on any row show
-    // "Unknown" rather than a guess.
-    const divCounts={};
-    entries.forEach(e=>{ if(e.division) divCounts[e.division]=(divCounts[e.division]||0)+1; });
-    let division='Unknown', topCount=0;
-    for(const d in divCounts){ if(divCounts[d]>topCount){ division=d; topCount=divCounts[d]; } }
+    // Division: the master files (party code -> division) are the source of
+    // truth per your instruction, since a party's code is what actually
+    // determines its division, not anything on the invoice line. Fall back
+    // to whatever the raw file's own Division column says (if it has one)
+    // only for codes absent from both masters, then to "Unknown".
+    let division = PARTY_DIVISION_MASTER[code];
+    if(!division){
+      const divCounts={};
+      entries.forEach(e=>{ if(e.division) divCounts[e.division]=(divCounts[e.division]||0)+1; });
+      let topCount=0;
+      division='Unknown';
+      for(const d in divCounts){ if(divCounts[d]>topCount){ division=d; topCount=divCounts[d]; } }
+    }
+
+    // Business Place / CFA: taken from the raw file's own "Business Place"
+    // column (it's on every invoice row already) — majority value per party,
+    // formatted as "C002 (Meerut)" using the master C&F sheets' code->name map.
+    const bpCounts={};
+    entries.forEach(e=>{ if(e.businessPlace) bpCounts[e.businessPlace]=(bpCounts[e.businessPlace]||0)+1; });
+    let businessPlace='', bpTop=0;
+    for(const b in bpCounts){ if(bpCounts[b]>bpTop){ businessPlace=b; bpTop=bpCounts[b]; } }
 
     const anyRow=entries.find(e=>e.name)||entries[0];
     const anyStateRow=entries.find(e=>e.state)||entries[0];
@@ -521,6 +558,7 @@ function computePaymentDues(rows, referenceDate){
       area: anyRow.city||'',
       state: anyStateRow.state||'',
       division,
+      businessPlace: formatBusinessPlace(businessPlace),
       matched: !!anyRow.name,
       buckets, totalDue, advanceCredit,
       oldestDueDate: oldestOpenDueDate?oldestOpenDueDate.toLocaleDateString('en-IN'):'',
@@ -579,6 +617,7 @@ function handlePaymentFile(evt){
         city:_muFindCol(header,['City']),
         state:_muFindCol(header,['State']),
         division:_muFindCol(header,['Division Name','Division']),
+        businessPlace:_muFindCol(header,['Business Place','CFA','C&F Code','C & F Code']),
         amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
         dueDate:_muFindCol(header,['Net Due Date']),
         billDate:_muFindCol(header,['Journal Entry Date','Invoice Date','Document Date','Posting Date','Bill Date'])
@@ -608,7 +647,8 @@ function handlePaymentFile(evt){
           name: col.name!==-1?String(row[col.name]||'').trim():'',
           city: col.city!==-1?String(row[col.city]||'').trim():'',
           state: col.state!==-1?String(row[col.state]||'').trim():'',
-          division: col.division!==-1?String(row[col.division]||'').trim():''
+          division: col.division!==-1?String(row[col.division]||'').trim():'',
+          businessPlace: col.businessPlace!==-1?String(row[col.businessPlace]||'').trim():''
         });
       }
       if(!parsed.length){
@@ -632,7 +672,9 @@ function handlePaymentFile(evt){
       if(noBillDate) lines.push(`<span style="color:#b45309"><strong>Warning:</strong> ${noBillDate} part${noBillDate===1?'y has':'ies have'} no billing date found - check the file has a "Journal Entry Date" / "Invoice Date" column, or "Days Since Last Bill" will show "—" for them.</span>`);
       if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) had no Customer Name on any row - shown by code only: ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
       const noDivision=parties.filter(p=>p.division==='Unknown').length;
-      if(noDivision) lines.push(`<span style="color:#b45309">${noDivision} part${noDivision===1?'y has':'ies have'} no Division value on any row - shown as "Unknown". Check this file has a Division column.</span>`);
+      if(noDivision) lines.push(`<span style="color:#b45309">${noDivision} part${noDivision===1?'y has':'ies have'} a code not found in either the OTC or Generic master file - Division shown as "Unknown". These may be new parties not yet added to a master file.</span>`);
+      const noBP=parties.filter(p=>!p.businessPlace).length;
+      if(noBP) lines.push(`<span style="color:#b45309">${noBP} part${noBP===1?'y has':'ies have'} no Business Place code found on any row - shown as "Unknown". Check this file has a Business Place column.</span>`);
       lines.push(`This will replace the current Payment Status snapshot.`);
       sumEl.innerHTML=lines.join('<br>');
       sumEl.style.display='block';
