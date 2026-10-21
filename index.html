@@ -2123,14 +2123,21 @@ function handlePaymentFile(evt){
         name:_muFindCol(header,['Customer Name']),
         city:_muFindCol(header,['City']),
         amount:_muFindCol(header,['Amount (CoCode Crcy)','Amount']),
-        dueDate:_muFindCol(header,['Net Due Date'])
+        dueDate:_muFindCol(header,['Net Due Date']),
+        clearing:_muFindCol(header,['Clearing Status'])
       };
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:''});
-      const parsed=[]; let skipped=0, suspiciousZero=0;
+      const parsed=[]; let skipped=0, suspiciousZero=0, clearedIgnored=0;
       for(let r=hIdx+1;r<rows.length;r++){
         const row=rows[r];
         if(!row) continue;
         const code=String(row[col.code]==null?'':row[col.code]).trim();
+        // SAP exports include already-cleared items (Clearing Status 1) that net to zero
+        // among themselves. Only open items (status 2) belong in outstanding/ageing.
+        if(col.clearing!==-1 && code){
+          const cs=String(row[col.clearing]==null?'':row[col.clearing]).trim();
+          if(cs!=='' && cs!=='2'){ clearedIgnored++; continue; }
+        }
         const amtRaw=row[col.amount];
         const dd=row[col.dueDate];
         if(!code || amtRaw===''||amtRaw==null || !dd){ if(code) skipped++; continue; }
@@ -2157,7 +2164,8 @@ function handlePaymentFile(evt){
       const unmatched=parties.filter(p=>!p.matched);
       const critical=parties.filter(p=>p.sheetBucket==='120+').length;
       const lines=[];
-      lines.push(`<strong>${parsed.length}</strong> ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      lines.push(`<strong>${parsed.length}</strong> open ledger rows read (${skipped} skipped - missing code/amount/due date).`);
+      if(clearedIgnored) lines.push(`${clearedIgnored} already-cleared rows ignored.`);
       if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file, some values may not be reading correctly.</span>`);
       lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
       lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
