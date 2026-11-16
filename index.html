@@ -1997,6 +1997,7 @@ function _psStatusLabel(days,bucket){
   return 'Critical 120+';
 }
 
+let _psDroppedParties=[];
 function computePaymentDues(rows, referenceDate){
   const byParty={};
   rows.forEach(r=>{
@@ -2005,7 +2006,16 @@ function computePaymentDues(rows, referenceDate){
   });
 
   const result={};
+  _psDroppedParties=[];
   for(const code in byParty){
+    // Only parties present in this portal's customer master belong here.
+    // Anything else (other divisions' parties in the same SAP export) is
+    // dropped and listed in the upload summary so nothing disappears silently.
+    if(!CUSTOMERS.find(c=>c.code===code)){
+      const r0=byParty[code].find(e=>e.name)||byParty[code][0];
+      _psDroppedParties.push({code,name:r0.name||code});
+      continue;
+    }
     const entries=byParty[code].slice().sort((a,b)=>a.dueDate-b.dueDate);
     const invoices=entries.filter(e=>e.amount>0).map(e=>({...e,open:e.amount}));
     let credit=entries.filter(e=>e.amount<0).reduce((s,e)=>s+(-e.amount),0);
@@ -2169,7 +2179,7 @@ function handlePaymentFile(evt){
       if(suspiciousZero) lines.push(`<span style="color:#dc2626"><strong>Warning:</strong> ${suspiciousZero} row(s) had a non-empty amount that parsed to 0 - check the Amount column format in this file, some values may not be reading correctly.</span>`);
       lines.push(`<strong>${parties.length}</strong> parties with an open balance.`);
       lines.push(`<strong>${critical}</strong> in Critical (120+) bracket.`);
-      if(unmatched.length) lines.push(`<span style="color:#b45309">${unmatched.length} party code(s) not found in your customer master - kept, SO Name shown as "Vacant": ${unmatched.slice(0,8).map(p=>p.code).join(', ')}${unmatched.length>8?'…':''}</span>`);
+      if(_psDroppedParties.length) lines.push(`<span style="color:#b45309">${_psDroppedParties.length} party code(s) not in your customer master were left out (not your parties): ${_psDroppedParties.slice(0,10).map(p=>p.code+' '+p.name).join('; ')}${_psDroppedParties.length>10?'…':''}. If any of these is really yours, add it under Customers and re-upload.</span>`);
       lines.push(`This will replace the current Payment Status snapshot.`);
       sumEl.innerHTML=lines.join('<br>');
       sumEl.style.display='block';
